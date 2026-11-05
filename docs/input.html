@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>結果入力 | H vs M 交流戦</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="gate" hidden></div>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <h1 class="brand">H vs M<span class="brand-sub"> 交流戦</span></h1>
+      <nav id="nav" class="nav" aria-label="ページ"></nav>
+    </div>
+  </header>
+  <div id="mock-banner" class="banner" hidden>サンプルデータを表示中（config.js の GAS_URL が未設定）</div>
+
+  <main class="container">
+    <section class="card">
+      <h2>試合結果の入力</h2>
+
+      <label class="field" for="event">開催回</label>
+      <select id="event"></select>
+
+      <div class="pair-head"><span class="badge badge-H">H</span> ペア</div>
+      <div class="row-2">
+        <select id="h1" aria-label="H ペア 1 人目"></select>
+        <select id="h2" aria-label="H ペア 2 人目"></select>
+      </div>
+
+      <div class="pair-head"><span class="badge badge-M">M</span> ペア</div>
+      <div class="row-2">
+        <select id="m1" aria-label="M ペア 1 人目"></select>
+        <select id="m2" aria-label="M ペア 2 人目"></select>
+      </div>
+
+      <label class="field">スコア（H – M）</label>
+      <div class="score-group">
+        <div class="score-group-label">H の勝ち</div>
+        <div class="score-btns" id="sc-h"></div>
+      </div>
+      <div class="score-group">
+        <div class="score-group-label">M の勝ち</div>
+        <div class="score-btns" id="sc-m"></div>
+      </div>
+      <div class="score-group">
+        <div class="score-group-label">引き分け</div>
+        <div class="score-btns one" id="sc-d"></div>
+      </div>
+
+      <div class="summary" id="summary">ペアとスコアを選んでください</div>
+
+      <label class="field" for="entered_by">入力者（任意）</label>
+      <input type="text" id="entered_by" placeholder="例：山田" maxlength="20">
+
+      <div style="margin-top:16px">
+        <button type="button" class="btn" id="submit" disabled>この内容で送信</button>
+      </div>
+      <div class="form-msg" id="msg"></div>
+    </section>
+
+    <section class="card" id="sent-card" hidden>
+      <h2>この端末で今送った試合</h2>
+      <ul class="match-list" id="sent"></ul>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/config.js"></script>
+<script src="js/mock.js"></script>
+<script src="js/api.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script>
+Auth.boot({ page: 'input.html', requireAdmin: true }).then(data => {
+  const $ = id => document.getElementById(id);
+  const selEvent = $('event');
+  const selH1 = $('h1'), selH2 = $('h2'), selM1 = $('m1'), selM2 = $('m2');
+  const btn = $('submit');
+  const msg = $('msg');
+  const summary = $('summary');
+  const enteredBy = $('entered_by');
+  const SCORES = {
+    h: [[6, 0], [6, 1], [6, 2], [6, 3], [6, 4]],
+    m: [[0, 6], [1, 6], [2, 6], [3, 6], [4, 6]],
+    d: [[5, 5]],
+  };
+  let score = null;
+  const sent = [];
+
+  // 開催回（新しい順、先頭を初期選択）
+  const events = data.events.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  UI.fillSelect(selEvent, events.map(e => ({ value: e.event_id, label: e.title + '（' + UI.fmtDate(e.date) + '）' })));
+
+  // メンバー（active のみ）
+  const active = data.members.filter(m => m.active);
+  const opts = team => active.filter(m => m.team === team).map(m => ({ value: m.member_id, label: m.display_name }));
+  [selH1, selH2].forEach(s => UI.fillSelect(s, opts('H'), '選択…'));
+  [selM1, selM2].forEach(s => UI.fillSelect(s, opts('M'), '選択…'));
+
+  // スコアボタン（取りうる 11 通りだけ）
+  Object.keys(SCORES).forEach(kind => {
+    $('sc-' + kind).innerHTML = SCORES[kind].map(([h, m]) =>
+      '<button type="button" class="score-btn ' + kind + '" data-h="' + h + '" data-m="' + m + '">' + h + '-' + m + '</button>'
+    ).join('');
+  });
+  document.querySelectorAll('.score-btn').forEach(b => b.addEventListener('click', () => {
+    score = [Number(b.dataset.h), Number(b.dataset.m)];
+    document.querySelectorAll('.score-btn').forEach(x => x.classList.toggle('on', x === b));
+    update();
+  }));
+
+  function showMsg(text, isError) {
+    msg.textContent = text;
+    msg.className = 'form-msg' + (isError ? ' error' : '');
+  }
+
+  // 片方で選んだ人をもう片方の候補から外す
+  function syncPartners(a, b) {
+    Array.from(b.options).forEach(o => { o.disabled = o.value !== '' && o.value === a.value; });
+    Array.from(a.options).forEach(o => { o.disabled = o.value !== '' && o.value === b.value; });
+  }
+
+  function current() {
+    return {
+      event_id: selEvent.value,
+      h_p1: selH1.value, h_p2: selH2.value,
+      m_p1: selM1.value, m_p2: selM2.value,
+      h_games: score ? score[0] : null,
+      m_games: score ? score[1] : null,
+      entered_by: enteredBy.value.trim(),
+      note: '',
+    };
+  }
+
+  function complete(c) {
+    return !!(c.event_id && c.h_p1 && c.h_p2 && c.m_p1 && c.m_p2 &&
+      c.h_p1 !== c.h_p2 && c.m_p1 !== c.m_p2 && score);
+  }
+
+  function resultOf(c) {
+    return c.h_games === 6 ? 'H' : c.m_games === 6 ? 'M' : 'D';
+  }
+
+  function update() {
+    syncPartners(selH1, selH2);
+    syncPartners(selM1, selM2);
+    const c = current();
+    if (complete(c)) {
+      summary.innerHTML =
+        '<span class="side-h">' + UI.esc(UI.pair(c.h_p1, c.h_p2)) + '</span>' +
+        '<span class="score">' + c.h_games + '-' + c.m_games + '</span>' +
+        '<span class="side-m">' + UI.esc(UI.pair(c.m_p1, c.m_p2)) + '</span>' +
+        '<span class="summary-result">' + UI.resultText(resultOf(c)) + '</span>';
+      btn.disabled = false;
+    } else {
+      summary.textContent = 'ペアとスコアを選んでください';
+      btn.disabled = true;
+    }
+  }
+
+  [selEvent, selH1, selH2, selM1, selM2].forEach(s => s.addEventListener('change', update));
+
+  // 入力者名はこの端末に覚えておく
+  try { enteredBy.value = localStorage.getItem('th_entered_by') || ''; } catch (e) { /* ignore */ }
+  enteredBy.addEventListener('change', () => {
+    try { localStorage.setItem('th_entered_by', enteredBy.value.trim()); } catch (e) { /* ignore */ }
+  });
+
+  function errText(code) {
+    if (code === 'network') return 'サーバーに接続できません。電波の状態を確認してください。';
+    if (code === 'bad_response') return 'サーバーの応答を読めません。GAS_URL を確認してください。';
+    return code;
+  }
+
+  btn.addEventListener('click', async () => {
+    const c = current();
+    if (!complete(c)) return;
+    btn.disabled = true;
+    btn.textContent = '送信中…';
+    showMsg('');
+
+    const res = await Api.addMatch(Auth.key(), c);
+    btn.textContent = 'この内容で送信';
+
+    if (!res.ok) {
+      if (res.error === 'auth') {
+        showMsg('幹事用パスワードで入り直してください。', true);
+        setTimeout(() => Auth.logout(), 1500);
+        return;
+      }
+      showMsg('送信できませんでした: ' + errText(res.error), true);
+      btn.disabled = false;
+      return;
+    }
+
+    Auth.invalidate();
+    const ev = UI.event(c.event_id);
+    sent.unshift(Object.assign({ match_id: res.match_id, date: ev ? ev.date : '', result: resultOf(c) }, c));
+    $('sent-card').hidden = false;
+    $('sent').innerHTML = sent.map(m => UI.matchRowHTML(m)).join('');
+    UI.toast('登録しました（No.' + res.match_id + '）');
+
+    // 開催回と入力者は残し、ペアとスコアだけ消して次の試合へ
+    [selH1, selH2, selM1, selM2].forEach(s => { s.value = ''; });
+    score = null;
+    document.querySelectorAll('.score-btn').forEach(x => x.classList.remove('on'));
+    update();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  if (!events.length) {
+    showMsg('開催回がありません。スプレッドシートの events シートに行を追加してください。', true);
+  }
+  update();
+});
+</script>
+</body>
+</html>

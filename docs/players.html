@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>個人成績 | H vs M 交流戦</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="gate" hidden></div>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <h1 class="brand">H vs M<span class="brand-sub"> 交流戦</span></h1>
+      <nav id="nav" class="nav" aria-label="ページ"></nav>
+    </div>
+  </header>
+  <div id="mock-banner" class="banner" hidden>サンプルデータを表示中（config.js の GAS_URL が未設定）</div>
+
+  <main class="container">
+    <section class="card">
+      <div class="card-head">
+        <h2>個人成績</h2>
+        <div class="seg" id="team-seg">
+          <button type="button" data-team="ALL" class="on">全員</button>
+          <button type="button" data-team="H">H</button>
+          <button type="button" data-team="M">M</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="players">
+          <thead>
+            <tr>
+              <th class="l">名前</th>
+              <th class="sortable" data-key="played">試合</th>
+              <th class="sortable" data-key="W">勝</th>
+              <th class="sortable" data-key="L">負</th>
+              <th class="sortable" data-key="D">分</th>
+              <th class="sortable sorted" data-key="rate">勝率</th>
+              <th class="sortable" data-key="gf">取得G</th>
+              <th class="sortable" data-key="ga">失G</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:.8rem;margin:10px 0 0">名前をタップすると対戦相手別・パートナー別の成績が見られます。勝率 = 勝 ÷ 試合数。</p>
+    </section>
+
+    <section class="card" id="detail" hidden></section>
+  </main>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/config.js"></script>
+<script src="js/mock.js"></script>
+<script src="js/api.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script>
+Auth.boot({ page: 'players.html' }).then(data => {
+  const stats = Stats.playerStats(data.matches, data.members);
+  const rows = Array.from(stats.values());
+  const tbody = document.querySelector('#players tbody');
+  const detail = document.getElementById('detail');
+  let team = 'ALL';
+  let sortKey = 'rate';
+  let sortAsc = false;
+  let selected = null;
+
+  function val(s, k) {
+    return k === 'rate' ? (s.rate === null ? -1 : s.rate) : s[k];
+  }
+
+  function render() {
+    const list = rows
+      .filter(s => team === 'ALL' || s.member.team === team)
+      .sort((a, b) => {
+        const d = val(a, sortKey) - val(b, sortKey);
+        if (d !== 0) return sortAsc ? d : -d;
+        return (b.W - a.W) || (b.played - a.played) || a.member.member_id.localeCompare(b.member.member_id);
+      });
+
+    tbody.innerHTML = list.map(s =>
+      '<tr class="clickable' + (s.member.member_id === selected ? ' selected' : '') + '" data-id="' + UI.esc(s.member.member_id) + '">' +
+      '<td class="l">' + UI.teamBadge(s.member.team) + ' ' + UI.esc(s.member.display_name) + '</td>' +
+      '<td class="num">' + s.played + '</td>' +
+      '<td class="num">' + s.W + '</td>' +
+      '<td class="num">' + s.L + '</td>' +
+      '<td class="num">' + s.D + '</td>' +
+      '<td class="num col-rate">' + UI.pct(s.rate) + '</td>' +
+      '<td class="num">' + s.gf + '</td>' +
+      '<td class="num">' + s.ga + '</td>' +
+      '</tr>'
+    ).join('');
+
+    document.querySelectorAll('#players th.sortable').forEach(th => {
+      const on = th.dataset.key === sortKey;
+      th.classList.toggle('sorted', on);
+      th.classList.toggle('asc', on && sortAsc);
+    });
+  }
+
+  function recordTable(list, label) {
+    if (!list.length) return '<p class="empty">まだありません</p>';
+    return (
+      '<div class="table-wrap"><table>' +
+      '<thead><tr><th class="l">' + label + '</th><th>試合</th><th>勝</th><th>負</th><th>分</th></tr></thead><tbody>' +
+      list.map(r =>
+        '<tr><td class="l">' + UI.esc(UI.name(r.id)) + '</td>' +
+        '<td class="num">' + r.played + '</td><td class="num">' + r.W + '</td>' +
+        '<td class="num">' + r.L + '</td><td class="num">' + r.D + '</td></tr>'
+      ).join('') +
+      '</tbody></table></div>'
+    );
+  }
+
+  function showDetail(id) {
+    const s = stats.get(id);
+    if (!s) return;
+    selected = id;
+    history.replaceState(null, '', '#' + encodeURIComponent(id));
+    const d = Stats.playerDetail(data.matches, id);
+    const played = UI.sortMatches(d.matches.map(x => x.match));
+
+    detail.hidden = false;
+    detail.innerHTML =
+      '<div class="detail-head">' +
+      '<h2>' + UI.teamBadge(s.member.team) + ' ' + UI.esc(s.member.display_name) + '</h2>' +
+      '<button type="button" class="link" id="detail-close">閉じる</button>' +
+      '</div>' +
+      '<p class="record"><b>' + s.played + '</b> 試合 <b>' + s.W + '</b> 勝 <b>' + s.L + '</b> 敗 <b>' + s.D + '</b> 分' +
+      '（勝率 <b>' + UI.pct(s.rate) + '</b>）／ ゲーム <b>' + s.gf + '</b> – <b>' + s.ga + '</b></p>' +
+      '<h3>対戦相手別</h3>' + recordTable(d.opponents, '相手') +
+      '<h3>パートナー別</h3>' + recordTable(d.partners, '相方') +
+      '<h3>出場試合</h3>' +
+      (played.length
+        ? '<ul class="match-list">' + played.map(m => UI.matchRowHTML(m, { highlight: id })).join('') + '</ul>'
+        : '<p class="empty">まだありません</p>');
+
+    document.getElementById('detail-close').addEventListener('click', () => {
+      detail.hidden = true;
+      selected = null;
+      history.replaceState(null, '', location.pathname);
+      render();
+    });
+    render();
+    detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  document.querySelectorAll('#players th.sortable').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.key;
+    if (sortKey === k) sortAsc = !sortAsc;
+    else { sortKey = k; sortAsc = false; }
+    render();
+  }));
+
+  document.querySelectorAll('#team-seg button').forEach(b => b.addEventListener('click', () => {
+    team = b.dataset.team;
+    document.querySelectorAll('#team-seg button').forEach(x => x.classList.toggle('on', x === b));
+    render();
+  }));
+
+  tbody.addEventListener('click', ev => {
+    const tr = ev.target.closest('tr[data-id]');
+    if (tr) showDetail(tr.dataset.id);
+  });
+
+  render();
+  if (location.hash.length > 1) showDetail(decodeURIComponent(location.hash.slice(1)));
+});
+</script>
+</body>
+</html>

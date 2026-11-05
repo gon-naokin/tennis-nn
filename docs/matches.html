@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>試合一覧 | H vs M 交流戦</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="gate" hidden></div>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <h1 class="brand">H vs M<span class="brand-sub"> 交流戦</span></h1>
+      <nav id="nav" class="nav" aria-label="ページ"></nav>
+    </div>
+  </header>
+  <div id="mock-banner" class="banner" hidden>サンプルデータを表示中（config.js の GAS_URL が未設定）</div>
+
+  <main class="container">
+    <section class="card">
+      <h2>試合一覧</h2>
+      <div class="row-2">
+        <div>
+          <label class="field" for="f-event">開催回</label>
+          <select id="f-event"></select>
+        </div>
+        <div>
+          <label class="field" for="f-player">選手</label>
+          <select id="f-player"></select>
+        </div>
+      </div>
+      <p class="muted" id="count" style="font-size:.85rem;margin:12px 0 4px"></p>
+      <ul id="list" class="match-list"></ul>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/config.js"></script>
+<script src="js/mock.js"></script>
+<script src="js/api.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script>
+Auth.boot({ page: 'matches.html' }).then(data => {
+  const fEvent = document.getElementById('f-event');
+  const fPlayer = document.getElementById('f-player');
+
+  const events = data.events.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  UI.fillSelect(fEvent, events.map(e => ({ value: e.event_id, label: e.title })), 'すべての開催回');
+
+  const group = team => data.members
+    .filter(m => m.team === team)
+    .map(m => '<option value="' + UI.esc(m.member_id) + '">' + UI.esc(m.display_name) + '</option>')
+    .join('');
+  fPlayer.innerHTML =
+    '<option value="">すべての選手</option>' +
+    '<optgroup label="H">' + group('H') + '</optgroup>' +
+    '<optgroup label="M">' + group('M') + '</optgroup>';
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('event')) fEvent.value = params.get('event');
+  if (params.get('player')) fPlayer.value = params.get('player');
+
+  function render() {
+    const ev = fEvent.value;
+    const pl = fPlayer.value;
+    const list = UI.sortMatches(data.matches.filter(m =>
+      (!ev || m.event_id === ev) &&
+      (!pl || [m.h_p1, m.h_p2, m.m_p1, m.m_p2].indexOf(pl) >= 0)
+    ));
+    const rec = Stats.teamRecord(list);
+    document.getElementById('count').textContent = list.length
+      ? list.length + ' 試合（H ' + rec.H + ' 勝・M ' + rec.M + ' 勝・引き分け ' + rec.D + '）'
+      : '';
+    document.getElementById('list').innerHTML = list.length
+      ? list.map(m => UI.matchRowHTML(m, { highlight: pl || null })).join('')
+      : '<li class="empty">該当する試合がありません</li>';
+  }
+
+  fEvent.addEventListener('change', render);
+  fPlayer.addEventListener('change', render);
+  render();
+});
+</script>
+</body>
+</html>
