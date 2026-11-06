@@ -51,6 +51,33 @@ const UI = (() => {
     return '<span class="badge badge-' + esc(team) + '">' + esc(team) + '</span>';
   }
 
+  /** 試合の結果に対応するキャラ（H=クマ、M=カエル、引き分け=風船） */
+  function resultImg(r) {
+    return 'img/' + (r === 'H' ? 'bear' : r === 'M' ? 'frog' : 'balloon') + '.png';
+  }
+
+  /** 選手ごとの相棒キャラ。member_id の番号で決まるので毎回同じ */
+  function avatarSrc(id) {
+    const pool = ['cat', 'dog', 'balloon', 'girl', 'star'];
+    const n = parseInt(String(id).slice(1), 10) || 0;
+    return 'img/' + pool[n % pool.length] + '.png';
+  }
+
+  /** データが無いときの表示 */
+  function emptyHTML(msg) {
+    return '<div class="empty"><img src="img/frog-sleep.png" alt="" class="empty-img"><p>' + esc(msg) + '</p></div>';
+  }
+
+  /** 登録成功時に星を画面に飛ばす */
+  function celebrate() {
+    const star = document.createElement('img');
+    star.src = 'img/star.png';
+    star.alt = '';
+    star.className = 'fly-star';
+    star.addEventListener('animationend', () => star.remove());
+    document.body.appendChild(star);
+  }
+
   /** 新しい順（日付 → match_id） */
   function sortMatches(list) {
     return list.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.match_id - a.match_id);
@@ -115,6 +142,6 @@ const UI = (() => {
   return {
     setData, getData, member, name, pair, event, eventTitle,
     esc, pct, fmtDate, resultText, badge, teamBadge, sortMatches, matchRowHTML,
-    renderNav, toast, fillSelect,
+    renderNav, toast, fillSelect, resultImg, avatarSrc, emptyHTML, celebrate,
   };
 })();

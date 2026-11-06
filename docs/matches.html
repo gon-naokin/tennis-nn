@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>試合一覧 | H vs M 交流戦</title>
+<link rel="icon" href="img/icon.png">
+<link rel="apple-touch-icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -19,6 +24,11 @@
   <div id="mock-banner" class="banner" hidden>サンプルデータを表示中（config.js の GAS_URL が未設定）</div>
 
   <main class="container">
+    <div class="page-hero">
+      <img src="img/dog.png" alt="" class="page-hero-img">
+      <p class="bubble">これまでの試合はぜんぶここ！クンクン探せるよ。</p>
+    </div>
+
     <section class="card">
       <h2>試合一覧</h2>
       <div class="row-2">
@@ -79,7 +89,7 @@ Auth.boot({ page: 'matches.html' }).then(data => {
       : '';
     document.getElementById('list').innerHTML = list.length
       ? list.map(m => UI.matchRowHTML(m, { highlight: pl || null })).join('')
-      : '<li class="empty">該当する試合がありません</li>';
+      : '<li>' + UI.emptyHTML('該当する試合がありません') + '</li>';
   }
 
   fEvent.addEventListener('change', render);

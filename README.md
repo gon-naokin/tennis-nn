@@ -17,6 +17,7 @@ tennis-hm/
 │   ├── matches.html   試合一覧
 │   ├── input.html     試合結果入力（幹事のみ）
 │   ├── css/style.css
+│   ├── img/           キャラクター画像（白フチ付きの透過 PNG）とアプリアイコン
 │   └── js/
 │       ├── config.js  GAS の URL（ここだけ環境依存）
 │       ├── auth.js    入り口パスワード

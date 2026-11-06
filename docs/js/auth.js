@@ -47,6 +47,9 @@ const Auth = (() => {
       : '';
     return (
       '<div class="gate-card">' +
+      '<div class="gate-cast" aria-hidden="true">' +
+      '<img src="img/bear.png" alt=""><img src="img/cat.png" alt=""><img src="img/frog.png" alt="">' +
+      '</div>' +
       '<h1 class="gate-title">' + UI.esc(CONFIG.APP_TITLE) + '</h1>' +
       '<p class="gate-lead">パスワードを入力してください</p>' +
       '<form id="gate-form" autocomplete="off">' +
@@ -87,6 +90,14 @@ const Auth = (() => {
         setTimeout(() => input.focus(), 0);
       }
 
+      // パスワードを覚えている端末で GAS の応答を待つ間の画面
+      function showLoading() {
+        app.hidden = true;
+        gate.hidden = false;
+        gate.innerHTML =
+          '<div class="loader" role="status"><img src="img/cat.png" alt=""><p>データを取りに行っています…</p></div>';
+      }
+
       function setBusy(busy) {
         const btn = document.getElementById('gate-submit');
         if (btn) { btn.disabled = busy; btn.textContent = busy ? '確認中…' : '入る'; }
@@ -95,6 +106,7 @@ const Auth = (() => {
       async function attempt(k, fromForm) {
         let data = fromForm ? null : readCache();
         if (!data) {
+          if (!fromForm) showLoading();
           setBusy(true);
           const res = await Api.getAll(k);
           setBusy(false);

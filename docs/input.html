@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>結果入力 | H vs M 交流戦</title>
+<link rel="icon" href="img/icon.png">
+<link rel="apple-touch-icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -19,6 +24,11 @@
   <div id="mock-banner" class="banner" hidden>サンプルデータを表示中（config.js の GAS_URL が未設定）</div>
 
   <main class="container">
+    <div class="page-hero">
+      <img src="img/girl.png" alt="" class="page-hero-img">
+      <p class="bubble">おつかれさま！試合の結果を教えてね。</p>
+    </div>
+
     <section class="card">
       <h2>試合結果の入力</h2>
 
@@ -154,6 +164,7 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(data => {
     const c = current();
     if (complete(c)) {
       summary.innerHTML =
+        '<img src="' + UI.resultImg(resultOf(c)) + '" alt="" class="summary-img">' +
         '<span class="side-h">' + UI.esc(UI.pair(c.h_p1, c.h_p2)) + '</span>' +
         '<span class="score">' + c.h_games + '-' + c.m_games + '</span>' +
         '<span class="side-m">' + UI.esc(UI.pair(c.m_p1, c.m_p2)) + '</span>' +
@@ -206,6 +217,7 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(data => {
     $('sent-card').hidden = false;
     $('sent').innerHTML = sent.map(m => UI.matchRowHTML(m)).join('');
     UI.toast('登録しました（No.' + res.match_id + '）');
+    UI.celebrate();
 
     // 開催回と入力者は残し、ペアとスコアだけ消して次の試合へ
     [selH1, selH2, selM1, selM2].forEach(s => { s.value = ''; });

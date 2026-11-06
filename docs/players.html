@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>個人成績 | H vs M 交流戦</title>
+<link rel="icon" href="img/icon.png">
+<link rel="apple-touch-icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -19,6 +24,11 @@
   <div id="mock-banner" class="banner" hidden>サンプルデータを表示中（config.js の GAS_URL が未設定）</div>
 
   <main class="container">
+    <div class="page-hero">
+      <img src="img/cat.png" alt="" class="page-hero-img">
+      <p class="bubble">今いちばん勝っているのはだれ？名前をタップして対戦成績を見てみよう！</p>
+    </div>
+
     <section class="card">
       <div class="card-head">
         <h2>個人成績</h2>
@@ -129,7 +139,7 @@ Auth.boot({ page: 'players.html' }).then(data => {
     detail.hidden = false;
     detail.innerHTML =
       '<div class="detail-head">' +
-      '<h2>' + UI.teamBadge(s.member.team) + ' ' + UI.esc(s.member.display_name) + '</h2>' +
+      '<h2><img src="' + UI.avatarSrc(id) + '" alt="" class="detail-avatar">' + UI.teamBadge(s.member.team) + ' ' + UI.esc(s.member.display_name) + '</h2>' +
       '<button type="button" class="link" id="detail-close">閉じる</button>' +
       '</div>' +
       '<p class="record"><b>' + s.played + '</b> 試合 <b>' + s.W + '</b> 勝 <b>' + s.L + '</b> 敗 <b>' + s.D + '</b> 分' +

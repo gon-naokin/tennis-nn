@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>戦績 | H vs M 交流戦</title>
+<link rel="icon" href="img/icon.png">
+<link rel="apple-touch-icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -20,13 +25,22 @@
 
   <main class="container">
     <section class="card hero">
-      <div class="hero-score">
-        <span class="team-h hero-label">H</span>
-        <span id="hero-h">0</span>
-        <span class="vs">–</span>
-        <span id="hero-m">0</span>
-        <span class="team-m hero-label">M</span>
+      <div class="hero-board">
+        <figure class="hero-team" id="team-h">
+          <img src="img/bear.png" alt="">
+          <figcaption class="team-h">H チーム</figcaption>
+        </figure>
+        <div class="hero-score">
+          <span id="hero-h" class="team-h">0</span>
+          <span class="vs">–</span>
+          <span id="hero-m" class="team-m">0</span>
+        </div>
+        <figure class="hero-team" id="team-m">
+          <img src="img/frog.png" alt="">
+          <figcaption class="team-m">M チーム</figcaption>
+        </figure>
       </div>
+      <p class="hero-msg" id="hero-msg"></p>
       <div class="hero-sub">
         引き分け <b id="hero-d">0</b> ／ 全 <b id="hero-total">0</b> 試合<br>
         取得ゲーム H <b id="hero-hg">0</b> – <b id="hero-mg">0</b> M
@@ -34,6 +48,7 @@
     </section>
 
     <section class="card">
+      <img src="img/balloon.png" alt="" class="card-mascot">
       <h2>開催回ごと</h2>
       <div class="table-wrap">
         <table id="by-event">
@@ -46,6 +61,7 @@
     </section>
 
     <section class="card">
+      <img src="img/star.png" alt="" class="card-mascot">
       <h2>最近の試合</h2>
       <ul id="recent" class="match-list"></ul>
       <a class="more" href="matches.html">すべての試合を見る</a>
@@ -72,6 +88,14 @@ Auth.boot({ page: 'index.html' }).then(data => {
   document.getElementById('hero-hg').textContent = rec.hGames;
   document.getElementById('hero-mg').textContent = rec.mGames;
 
+  // リードしているチームのキャラが跳ねる
+  document.getElementById('team-h').classList.toggle('leading', rec.H > rec.M);
+  document.getElementById('team-m').classList.toggle('leading', rec.M > rec.H);
+  document.getElementById('hero-msg').textContent =
+    rec.total === 0 ? '第1試合を待ってます！' :
+    rec.H > rec.M ? 'H チームがリード中！' :
+    rec.M > rec.H ? 'M チームがリード中！' : '五分五分の大接戦！';
+
   const rows = Stats.byEvent(matches, data.events);
   const tbody = document.querySelector('#by-event tbody');
   tbody.innerHTML = rows.length
@@ -89,7 +113,7 @@ Auth.boot({ page: 'index.html' }).then(data => {
   const recent = UI.sortMatches(matches).slice(0, 5);
   document.getElementById('recent').innerHTML = recent.length
     ? recent.map(m => UI.matchRowHTML(m)).join('')
-    : '<li class="empty">まだ試合がありません</li>';
+    : '<li>' + UI.emptyHTML('まだ試合がありません。すやすや…') + '</li>';
 });
 </script>
 </body>
