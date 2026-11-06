@@ -243,6 +243,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .summary .score { margin: 0 8px; }
 .summary-img { display: block; width: 72px; height: 72px; object-fit: contain; margin: 0 auto 4px; animation: pop .3s ease-out; }
 .summary-result { display: block; margin-top: 4px; font-size: .9rem; color: var(--muted); }
+.summary-new { display: block; margin-top: 6px; font-size: .85rem; font-weight: 700; color: var(--fg); }
 .form-msg { margin-top: 10px; font-size: .9rem; }
 .form-msg.error { color: var(--danger); font-weight: 600; }
 

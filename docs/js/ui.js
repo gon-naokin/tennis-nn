@@ -13,6 +13,29 @@ const UI = (() => {
   }
   function getData() { return data; }
 
+  /** 新しく登録された人を画面のデータに足す */
+  function addMembers(list) {
+    list.forEach(m => {
+      if (memberById.has(m.member_id)) return;
+      data.members.push(m);
+      memberById.set(m.member_id, m);
+    });
+  }
+
+  /** 名前の比較用キー。全角半角・空白・大文字小文字の違いを無視する */
+  function nameKey(s) {
+    return String(s === undefined || s === null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+  }
+
+  /** 入力された名前からメンバーを探す。チーム内で表示名、次に名前の順に見る */
+  function findMember(team, text) {
+    const key = nameKey(text);
+    const inTeam = data.members.filter(m => m.team === team);
+    const hit = list => (list.length === 1 ? list[0] : null);
+    return hit(inTeam.filter(m => nameKey(m.display_name) === key)) ||
+      hit(inTeam.filter(m => nameKey(m.name) === key));
+  }
+
   function member(id) { return memberById.get(id); }
   function name(id) {
     const m = memberById.get(id);
@@ -140,7 +163,7 @@ const UI = (() => {
   }
 
   return {
-    setData, getData, member, name, pair, event, eventTitle,
+    setData, getData, addMembers, nameKey, findMember, member, name, pair, event, eventTitle,
     esc, pct, fmtDate, resultText, badge, teamBadge, sortMatches, matchRowHTML,
     renderNav, toast, fillSelect, resultImg, avatarSrc, emptyHTML, celebrate,
   };

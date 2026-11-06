@@ -3,14 +3,15 @@
  *
  * セットアップ手順は README.md を参照。
  *   1. スプレッドシートの「拡張機能 → Apps Script」を開き、このファイルの内容を貼り付けて保存
- *   2. エディタ上で setup() を実行（初回は権限の承認が出る）。members はダミー名で作られるので実名に書き換える
+ *   2. エディタ上で setup() を実行（初回は権限の承認が出る）。members は空で作られ、試合入力のときに名前が自動で登録される
  *   3. プロジェクトの設定 → スクリプト プロパティ に VIEWER_PASS / ADMIN_PASS を登録
  *   4. デプロイ → 新しいデプロイ → 種類「ウェブアプリ」／実行ユーザー「自分」／アクセス「全員」
  *   5. 発行された URL を docs/js/config.js の GAS_URL に貼る
  *
  * API（すべて POST、本文は JSON 文字列）
  *   { action: 'getAll',   key }         → { ok, role, members, events, matches }
- *   { action: 'addMatch', key, match }  → { ok, match_id }   ※ key は ADMIN_PASS のみ
+ *   { action: 'addMatch', key, match }  → { ok, match_id, ids, created }   ※ key は ADMIN_PASS のみ
+ *     match の h_p1 / h_p2 / m_p1 / m_p2 は member_id か名前。初めての名前は members に追加し、created で返す
  *   失敗時は { ok: false, error: '...' }。error が 'auth' ならパスワード不一致。
  */
 
@@ -24,21 +25,6 @@ const HEADERS = {
   matches: ['match_id', 'event_id', 'date', 'h_p1', 'h_p2', 'm_p1', 'm_p2',
     'h_games', 'm_games', 'result', 'entered_at', 'entered_by', 'note', 'deleted'],
 };
-
-// setup() で members シートが空のときに入れる初期行（H 11 名、M 14 名）。
-// 公開リポジトリに実名を置かないためダミー名にしてある。setup() のあとシート上で name / display_name を実名に書き換える。
-function seedMembers() {
-  const rows = [];
-  const add = (team, count) => {
-    for (let i = 1; i <= count; i++) {
-      const name = team + '選手' + i;
-      rows.push([team + ('0' + i).slice(-2), team, name, name, true]);
-    }
-  };
-  add('H', 11);
-  add('M', 14);
-  return rows;
-}
 
 // ---------------------------------------------------------------------------
 // エントリポイント
@@ -147,30 +133,33 @@ function getAll(role) {
 
 function addMatch(input) {
   const eventId = str(input.event_id);
-  const ids = ['h_p1', 'h_p2', 'm_p1', 'm_p2'].map(k => str(input[k]));
   const h = Number(input.h_games);
   const m = Number(input.m_games);
 
   const ev = readSheet(SHEET.events).find(r => str(r.event_id) === eventId);
   if (!ev) throw new Error('開催回が見つかりません: ' + eventId);
 
-  const byId = {};
-  readSheet(SHEET.members).forEach(r => { byId[str(r.member_id)] = r; });
-  ids.forEach((id, i) => {
-    const expect = i < 2 ? 'H' : 'M';
-    const mb = byId[id];
-    if (!mb) throw new Error('メンバーが見つかりません: ' + id);
-    if (str(mb.team).toUpperCase() !== expect) {
-      throw new Error(expect + ' 側に ' + expect + ' チーム以外の人がいます: ' + id);
-    }
-  });
-  if (ids[0] === ids[1] || ids[2] === ids[3]) throw new Error('同じ人がペアになっています');
   if (!isValidScore(h, m)) throw new Error('スコアが不正です: ' + input.h_games + '-' + input.m_games);
 
   // 複数コートから同時に送られても連番が壊れないよう直列化する
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    // 検証がすべて通ってから members に書く。不正な送信で人が増えないようにする
+    const members = readSheet(SHEET.members);
+    const picks = [['h_p1', 'H'], ['h_p2', 'H'], ['m_p1', 'M'], ['m_p2', 'M']]
+      .map(([k, team]) => pickMember(members, team, str(input[k])));
+    if (samePerson(picks[0], picks[1]) || samePerson(picks[2], picks[3])) {
+      throw new Error('同じ人がペアになっています');
+    }
+    const created = [];
+    const ids = picks.map(p => {
+      if (p.id) return p.id;
+      const mb = addMember(members, p.team, p.name);
+      created.push(mb);
+      return mb.member_id;
+    });
+
     const sheet = getSheet(SHEET.matches);
     const matchId = nextMatchId(sheet);
     const row = {
@@ -186,10 +175,57 @@ function addMatch(input) {
       deleted: '',
     };
     sheet.appendRow(HEADERS.matches.map(k => row[k]));
-    return { ok: true, match_id: matchId };
+    return { ok: true, match_id: matchId, ids: ids, created: created };
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * ID か名前から人を決める。登録済みなら { id }、初めての名前なら { team, name, key } を返す。
+ * チームごとに探すので、H と M に同じ名前の人がいても別人として扱う。
+ */
+function pickMember(rows, team, value) {
+  if (!value) throw new Error('名前が入力されていません');
+
+  if (/^[HM]\d+$/i.test(value)) {
+    const id = value.toUpperCase();
+    const byId = rows.filter(r => str(r.member_id) === id)[0];
+    if (!byId) throw new Error('メンバーが見つかりません: ' + value);
+    if (str(byId.team).toUpperCase() !== team) {
+      throw new Error(team + ' 側に ' + team + ' チーム以外の人がいます: ' + value);
+    }
+    return { id: id };
+  }
+
+  const key = nameKey(value);
+  const inTeam = rows.filter(r => str(r.team).toUpperCase() === team);
+  const shown = inTeam.filter(r => nameKey(str(r.display_name) || str(r.name)) === key);
+  if (shown.length === 1) return { id: str(shown[0].member_id) };
+  const named = inTeam.filter(r => nameKey(r.name) === key);
+  if (named.length === 1) return { id: str(named[0].member_id) };
+  if (shown.length || named.length) throw new Error('同じ名前の人が複数います: ' + value);
+
+  // 先頭の = などはシートが数式として解釈するので受け付けない
+  if (/^[=+\-@']/.test(value) || value.length > 20) throw new Error('使えない名前です: ' + value);
+  return { team: team, name: value, key: key };
+}
+
+function samePerson(a, b) {
+  return (a.id || a.key) === (b.id || b.key);
+}
+
+/** members に 1 行足す。rows も更新するので、同じ送信内の次の人の採番がずれない */
+function addMember(rows, team, name) {
+  const nums = rows
+    .filter(r => str(r.team).toUpperCase() === team)
+    .map(r => parseInt(str(r.member_id).slice(1), 10) || 0);
+  const n = (nums.length ? Math.max.apply(null, nums) : 0) + 1;
+  const id = team + ('0' + n).slice(-2);
+  const row = { member_id: id, team: team, name: name, display_name: name, active: true };
+  getSheet(SHEET.members).appendRow(HEADERS.members.map(k => row[k]));
+  rows.push(row);
+  return row;
 }
 
 function nextMatchId(sheet) {
@@ -205,7 +241,7 @@ function nextMatchId(sheet) {
 // 初期セットアップ・保守用（Apps Script エディタから手動で実行する）
 // ---------------------------------------------------------------------------
 
-/** シート 3 枚と見出しを作り、members が空なら 25 名を入れる。何度実行しても壊れない */
+/** シート 3 枚と見出しを作る。members は試合入力のときに自動で増える。何度実行しても壊れない */
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -225,12 +261,6 @@ function setup() {
   const mt = ss.getSheetByName(SHEET.matches);
   mt.getRange('C:C').setNumberFormat('@');
   mt.getRange('K:K').setNumberFormat('@');
-
-  const mb = ss.getSheetByName(SHEET.members);
-  if (mb.getLastRow() <= 1) {
-    const seed = seedMembers();
-    mb.getRange(2, 1, seed.length, seed[0].length).setValues(seed);
-  }
 
   Logger.log('setup 完了: members / events / matches を用意しました');
 }
@@ -316,6 +346,11 @@ function jsonOut(obj) {
 
 function str(v) {
   return v === undefined || v === null ? '' : String(v).trim();
+}
+
+/** 名前の比較用キー。全角半角・空白・大文字小文字の違いを無視する */
+function nameKey(v) {
+  return str(v).normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 }
 
 function toBool(v, dflt) {

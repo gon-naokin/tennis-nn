@@ -43,6 +43,7 @@ const Mock = (() => {
   }));
 
   const STORE = 'th_mock_matches';
+  const STORE_MEMBERS = 'th_mock_members';
 
   function load() {
     try {
@@ -54,6 +55,39 @@ const Mock = (() => {
 
   function save(list) {
     try { sessionStorage.setItem(STORE, JSON.stringify(list)); } catch (e) { /* ignore */ }
+  }
+
+  function loadAdded() {
+    try {
+      const s = sessionStorage.getItem(STORE_MEMBERS);
+      if (s) return JSON.parse(s);
+    } catch (e) { /* 使えない環境では空を返す */ }
+    return [];
+  }
+
+  function nameKey(s) {
+    return String(s === undefined || s === null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+  }
+
+  /** ID か名前を受け取り、member_id か新しい人の情報を返す（Code.gs の pickMember と同じ考え方） */
+  function pickMember(list, team, value) {
+    const v = String(value || '').trim();
+    if (!v) return { error: '名前が入力されていません' };
+    if (/^[HM]\d+$/i.test(v)) {
+      const byId = list.filter(m => m.member_id === v.toUpperCase())[0];
+      if (!byId) return { error: 'メンバーが見つかりません: ' + v };
+      if (byId.team !== team) return { error: team + ' 側に ' + team + ' チーム以外の人がいます: ' + v };
+      return { id: byId.member_id };
+    }
+    const key = nameKey(v);
+    const inTeam = list.filter(m => m.team === team);
+    const shown = inTeam.filter(m => nameKey(m.display_name) === key);
+    if (shown.length === 1) return { id: shown[0].member_id };
+    const named = inTeam.filter(m => nameKey(m.name) === key);
+    if (named.length === 1) return { id: named[0].member_id };
+    if (shown.length || named.length) return { error: '同じ名前の人が複数います: ' + v };
+    if (/^[=+\-@']/.test(v) || v.length > 20) return { error: '使えない名前です: ' + v };
+    return { team, name: v, key };
   }
 
   function delay(value) {
@@ -71,7 +105,7 @@ const Mock = (() => {
     const matches = load();
 
     if (payload.action === 'getAll') {
-      return delay({ ok: true, role, members, events, matches });
+      return delay({ ok: true, role, members: members.concat(loadAdded()), events, matches });
     }
 
     if (payload.action === 'addMatch') {
@@ -82,17 +116,37 @@ const Mock = (() => {
       const ev = events.filter(e => e.event_id === m.event_id)[0];
       if (!ev) return delay({ ok: false, error: '開催回が見つかりません' });
       if (!validScore(h, g)) return delay({ ok: false, error: 'スコアが不正です' });
-      if (m.h_p1 === m.h_p2 || m.m_p1 === m.m_p2) return delay({ ok: false, error: '同じ人がペアになっています' });
+      const added = loadAdded();
+      const all = members.concat(added);
+      const picks = [[m.h_p1, 'H'], [m.h_p2, 'H'], [m.m_p1, 'M'], [m.m_p2, 'M']].map(([v, t]) => pickMember(all, t, v));
+      const bad = picks.filter(p => p.error)[0];
+      if (bad) return delay({ ok: false, error: bad.error });
+      const same = (a, b) => (a.id || a.key) === (b.id || b.key);
+      if (same(picks[0], picks[1]) || same(picks[2], picks[3])) return delay({ ok: false, error: '同じ人がペアになっています' });
+
+      const created = [];
+      const ids = picks.map(p => {
+        if (p.id) return p.id;
+        const nums = all.filter(x => x.team === p.team).map(x => parseInt(x.member_id.slice(1), 10) || 0);
+        const n = (nums.length ? Math.max.apply(null, nums) : 0) + 1;
+        const mb = { member_id: p.team + ('0' + n).slice(-2), team: p.team, name: p.name, display_name: p.name, active: true };
+        all.push(mb);
+        added.push(mb);
+        created.push(mb);
+        return mb.member_id;
+      });
+      try { sessionStorage.setItem(STORE_MEMBERS, JSON.stringify(added)); } catch (e) { /* ignore */ }
+
       const id = matches.reduce((x, r) => Math.max(x, r.match_id), 0) + 1;
       matches.push({
         match_id: id, event_id: m.event_id, date: ev.date,
-        h_p1: m.h_p1, h_p2: m.h_p2, m_p1: m.m_p1, m_p2: m.m_p2,
+        h_p1: ids[0], h_p2: ids[1], m_p1: ids[2], m_p2: ids[3],
         h_games: h, m_games: g,
         result: h === 6 ? 'H' : g === 6 ? 'M' : 'D',
         entered_by: m.entered_by || '', note: m.note || '',
       });
       save(matches);
-      return delay({ ok: true, match_id: id });
+      return delay({ ok: true, match_id: id, ids, created });
     }
 
     return delay({ ok: false, error: 'unknown_action' });
