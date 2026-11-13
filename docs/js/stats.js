@@ -46,6 +46,23 @@ const Stats = (() => {
     return { total: matches.length, S, D, last, people: people.size };
   }
 
+  /** 日付ごとの内訳（新しい順）。[{ date, total, S, D, people }] */
+  function byDate(matches) {
+    const map = new Map();
+    matches.forEach(m => {
+      const d = m.date || '';
+      let row = map.get(d);
+      if (!row) { row = { date: d, total: 0, S: 0, D: 0, ids: new Set() }; map.set(d, row); }
+      row.total += 1;
+      if (m.type === 'S') row.S += 1; else row.D += 1;
+      const s = sides(m);
+      s.A.concat(s.B).forEach(id => row.ids.add(id));
+    });
+    return Array.from(map.values())
+      .map(r => ({ date: r.date, total: r.total, S: r.S, D: r.D, people: r.ids.size }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
   /** 個人成績。member_id → { member, played, W, L, D, gf, ga, rate } */
   function playerStats(matches, members) {
     const stats = new Map();
@@ -79,7 +96,7 @@ const Stats = (() => {
     const ra = a.rate === null ? -1 : a.rate;
     const rb = b.rate === null ? -1 : b.rate;
     return (rb - ra) || (b.W - a.W) || (b.played - a.played) ||
-      String(a.member.display_name).localeCompare(String(b.member.display_name), 'ja');
+      String(a.member.display_name).localeCompare(String(b.member.display_name), 'ja', { numeric: true });
   }
 
   /** 勝率ランキング。試合数が min 未満の人は外す */
@@ -119,5 +136,5 @@ const Stats = (() => {
     };
   }
 
-  return { sides, sideOf, hasPlayer, outcomeFor, byType, summary, playerStats, compareRate, ranking, playerDetail };
+  return { sides, sideOf, hasPlayer, outcomeFor, byType, summary, byDate, playerStats, compareRate, ranking, playerDetail };
 })();

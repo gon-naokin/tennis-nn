@@ -65,6 +65,20 @@
     </section>
 
     <section class="card">
+      <img src="img/dog.png" alt="" class="card-mascot card-mascot-wide">
+      <h2>日付ごと</h2>
+      <div class="table-wrap">
+        <table id="by-date">
+          <thead>
+            <tr><th class="l">日付</th><th>試合</th><th>シングルス</th><th>ダブルス</th><th>人数</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <a class="more" href="matches.html" id="by-date-more" hidden>すべての日付を見る</a>
+    </section>
+
+    <section class="card">
       <img src="img/balloon.png" alt="" class="card-mascot">
       <h2>最近の試合</h2>
       <ul id="recent" class="match-list"></ul>
@@ -128,9 +142,24 @@ Auth.boot({ page: 'index.html' }).then(data => {
   });
   renderRanking();
 
+  // 日付ごと（新しい 8 日分）。日付を押すとその日の試合一覧へ
+  const days = Stats.byDate(matches);
+  document.querySelector('#by-date tbody').innerHTML = days.length
+    ? days.slice(0, 8).map(r =>
+        '<tr>' +
+        '<td class="l date-cell"><a href="matches.html?date=' + encodeURIComponent(r.date) + '">' + UI.esc(UI.fmtDate(r.date) || '日付なし') + '</a></td>' +
+        '<td class="num">' + r.total + '</td>' +
+        '<td class="num">' + r.S + '</td>' +
+        '<td class="num">' + r.D + '</td>' +
+        '<td class="num">' + r.people + '</td>' +
+        '</tr>'
+      ).join('')
+    : '<tr><td colspan="5" class="empty">まだ試合がありません</td></tr>';
+  $('by-date-more').hidden = days.length <= 8;
+
   const recent = UI.sortMatches(matches).slice(0, 5);
   $('recent').innerHTML = recent.length
-    ? recent.map(m => UI.matchRowHTML(m)).join('')
+    ? UI.matchListByDate(recent)
     : '<li>' + UI.emptyHTML('まだ試合がありません。すやすや…') + '</li>';
 });
 </script>

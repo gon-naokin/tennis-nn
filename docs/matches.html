@@ -31,6 +31,8 @@
 
     <section class="card">
       <h2>試合一覧</h2>
+      <label class="field" for="f-date">日付</label>
+      <select id="f-date"></select>
       <div class="row-2">
         <div>
           <label class="field" for="f-type">種目</label>
@@ -61,18 +63,25 @@
 <script src="js/auth.js"></script>
 <script>
 Auth.boot({ page: 'matches.html' }).then(data => {
+  const fDate = document.getElementById('f-date');
   const fType = document.getElementById('f-type');
   const fPlayer = document.getElementById('f-player');
 
+  UI.fillSelect(fDate, Stats.byDate(data.matches).map(r => ({
+    value: r.date, label: (UI.fmtDate(r.date) || '日付なし') + '（' + r.total + ' 試合）',
+  })), 'すべての日付');
   UI.fillSelect(fPlayer, UI.sortedMembers().map(m => ({ value: m.member_id, label: m.display_name })), 'すべての選手');
 
   const params = new URLSearchParams(location.search);
+  if (params.get('date')) fDate.value = params.get('date');
   if (params.get('type')) fType.value = params.get('type');
   if (params.get('player')) fPlayer.value = params.get('player');
 
   function render() {
     const pl = fPlayer.value;
-    const list = UI.sortMatches(Stats.byType(data.matches, fType.value).filter(m => !pl || Stats.hasPlayer(m, pl)));
+    const dt = fDate.value;
+    const list = UI.sortMatches(Stats.byType(data.matches, fType.value)
+      .filter(m => (!dt || m.date === dt) && (!pl || Stats.hasPlayer(m, pl))));
     const sum = Stats.summary(list);
     let text = list.length ? list.length + ' 試合（シングルス ' + sum.S + '・ダブルス ' + sum.D + '）' : '';
     if (pl && list.length) {
@@ -81,10 +90,17 @@ Auth.boot({ page: 'matches.html' }).then(data => {
     }
     document.getElementById('count').textContent = text;
     document.getElementById('list').innerHTML = list.length
-      ? list.map(m => UI.matchRowHTML(m, { highlight: pl || null })).join('')
+      ? UI.matchListByDate(list, { highlight: pl || null })
       : '<li>' + UI.emptyHTML('該当する試合がありません') + '</li>';
   }
 
+  fDate.addEventListener('change', () => {
+    // 絞り込みの状態を URL に残し、戻る・共有で同じ表示になるようにする
+    const q = new URLSearchParams(location.search);
+    if (fDate.value) q.set('date', fDate.value); else q.delete('date');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''));
+    render();
+  });
   fType.addEventListener('change', render);
   fPlayer.addEventListener('change', render);
   render();

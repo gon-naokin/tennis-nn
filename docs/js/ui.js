@@ -45,7 +45,7 @@ const UI = (() => {
     return data.members
       .filter(m => m.active || played.has(m.member_id))
       .slice()
-      .sort((a, b) => String(a.display_name).localeCompare(String(b.display_name), 'ja'));
+      .sort((a, b) => String(a.display_name).localeCompare(String(b.display_name), 'ja', { numeric: true }));
   }
 
   function esc(s) {
@@ -115,11 +115,12 @@ const UI = (() => {
   /** 試合 1 件の行。opts.highlight に member_id を渡すとその人を太字にする */
   function matchRowHTML(m, opts) {
     const hl = (opts && opts.highlight) || null;
+    const noDate = !!(opts && opts.noDate);
     const s = Stats.sides(m);
     const cls = m.result === 'A' ? 'win-a' : m.result === 'B' ? 'win-b' : 'draw';
     return (
       '<li class="match ' + cls + '">' +
-      '<div class="match-meta">' + esc(fmtDate(m.date)) + ' ' + typeBadge(m.type) + '</div>' +
+      '<div class="match-meta">' + (noDate ? '' : esc(fmtDate(m.date)) + ' ') + typeBadge(m.type) + '</div>' +
       '<div class="match-line">' +
       '<span class="side side-a">' + sideHTML(s.A, hl) + '</span>' +
       '<span class="score">' + esc(m.a_games) + '-' + esc(m.b_games) + '</span>' +
@@ -128,6 +129,24 @@ const UI = (() => {
       (m.note ? '<div class="match-note">' + esc(m.note) + '</div>' : '') +
       '</li>'
     );
+  }
+
+  /** 日付の見出しを挟んだ試合一覧（新しい順に並べてから渡す） */
+  function matchListByDate(list, opts) {
+    let html = '';
+    let current = null;
+    list.forEach(m => {
+      if (m.date !== current) {
+        current = m.date;
+        const day = list.filter(x => x.date === current);
+        const s = day.filter(x => x.type === 'S').length;
+        html += '<li class="day-head"><span class="day-date">' + esc(fmtDate(current) || '日付なし') + '</span>' +
+          '<span class="day-count">' + day.length + ' 試合' +
+          (s && s < day.length ? '（単 ' + s + '・複 ' + (day.length - s) + '）' : '') + '</span></li>';
+      }
+      html += matchRowHTML(m, Object.assign({}, opts, { noDate: true }));
+    });
+    return html;
   }
 
   /** 対戦成績の表（相手別・パートナー別） */
@@ -198,7 +217,7 @@ const UI = (() => {
 
   return {
     setData, getData, addMembers, nameKey, findMember, member, name, sortedMembers,
-    esc, pct, fmtDate, today, typeLabel, typeBadge, sortMatches, sideHTML, matchRowHTML, recordTable,
+    esc, pct, fmtDate, today, typeLabel, typeBadge, sortMatches, sideHTML, matchRowHTML, matchListByDate, recordTable,
     renderNav, toast, fillSelect, bindSeg, setSeg, resultImg, avatarSrc, emptyHTML, celebrate,
   };
 })();

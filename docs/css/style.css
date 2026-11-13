@@ -136,6 +136,7 @@ main.container { padding-top: 16px; padding-bottom: 48px; }
   position: absolute; right: 8px; top: -26px; width: 72px; height: 72px; object-fit: contain;
   pointer-events: none; transform: rotate(6deg);
 }
+.card-mascot-wide { width: 96px; top: -18px; }
 
 /* 案内役の吹き出し */
 .page-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
@@ -217,6 +218,34 @@ select, input[type="text"], input[type="password"], input[type="date"] {
   background: var(--surface); color: var(--fg); min-height: 44px;
 }
 select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* iPhone の日付欄は既定の見た目だと幅と高さが他の欄と揃わないので、素の入力欄として描く */
+input[type="date"] {
+  -webkit-appearance: none; appearance: none; display: block; text-align: left; line-height: 1.4;
+}
+input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+input.target { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+
+/* 登録済みの人をタップで入れるボタン */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: inherit; font-weight: 700; font-size: .9rem; min-height: 38px; padding: 6px 12px; cursor: pointer;
+  border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); color: var(--fg);
+}
+.chip:active { transform: scale(.95); }
+.chip.used { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.chips-hint { font-size: .78rem; color: var(--muted); margin: 6px 0 0; }
+
+/* 日付ごとの見出し */
+.day-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  margin-top: 14px; padding: 6px 10px; border-radius: 10px; background: var(--surface-2);
+}
+.day-head:first-child { margin-top: 4px; }
+.day-date { font-weight: 900; }
+.day-count { font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.match-meta .badge:first-child { margin-left: 0; }
+.day-head + .match { border-top: 0; }
+td.date-cell a { font-weight: 700; }
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .row-2.one { grid-template-columns: 1fr; }
 .pair-head { display: flex; align-items: center; gap: 8px; margin-top: 18px; font-weight: 700; }
