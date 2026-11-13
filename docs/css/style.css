@@ -256,22 +256,20 @@ td.date-cell a { font-weight: 700; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn-secondary { background: var(--surface-2); color: var(--fg); }
 
-/* スコアボタン */
-.score-group { margin-top: 10px; }
-.score-group-label { font-size: .8rem; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
-.score-btns { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.score-btns.one { grid-template-columns: 1fr; }
-.score-btn {
-  padding: 10px 0; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
-  color: var(--fg); font-weight: 700; font-size: 1.05rem; cursor: pointer; min-height: 44px; font-variant-numeric: tabular-nums;
+/* スコア入力（0〜7 の数字を打つ） */
+.score-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.score-side { display: flex; align-items: center; gap: 8px; }
+.score-sep { font-size: 1.6rem; font-weight: 900; color: var(--muted); }
+input.score-input {
+  width: 72px; min-height: 60px; padding: 4px; text-align: center;
+  font-size: 2rem; font-weight: 900; font-variant-numeric: tabular-nums;
+  border: 2px solid var(--line); border-radius: 14px;
 }
-.score-btn.a { border-color: var(--a-soft); }
-.score-btn.b { border-color: var(--b-soft); }
-.score-btn:active { transform: scale(.94); }
-.score-btn.on { outline: 2px solid var(--accent); background: var(--accent-soft); }
-.score-btn.a.on { outline-color: var(--a); background: var(--a-soft); color: var(--a); }
-.score-btn.b.on { outline-color: var(--b); background: var(--b-soft); color: var(--b); }
-.score-btn.d.on { outline-color: var(--d); background: var(--d-soft); color: var(--d); }
+#score-a { border-color: var(--a-soft); }
+#score-b { border-color: var(--b-soft); }
+#score-a:focus { outline-color: var(--a); }
+#score-b:focus { outline-color: var(--b); }
+input.score-input.bad { border-color: var(--danger); color: var(--danger); }
 
 /* 入力の確認欄 */
 .summary {

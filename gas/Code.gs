@@ -112,8 +112,8 @@ function getAll(role) {
     .filter(r => str(r.match_id) !== '' && !toBool(r.deleted, false))
     .map(r => {
       const m = normalizeRow(r);
-      const a = Number(m.a_games);
-      const b = Number(m.b_games);
+      const a = num(m.a_games);
+      const b = num(m.b_games);
       const type = typeOf(m.type);
       return {
         match_id: Number(m.match_id),
@@ -156,8 +156,8 @@ function typeOf(v) {
 function addMatch(input) {
   const t = str(input.type).toUpperCase();
   if (t !== 'S' && t !== 'D') throw new Error('種目が不正です: ' + str(input.type));
-  const a = Number(input.a_games);
-  const b = Number(input.b_games);
+  const a = num(input.a_games);
+  const b = num(input.b_games);
   if (!isValidScore(a, b)) throw new Error('スコアが不正です: ' + input.a_games + '-' + input.b_games);
   const date = str(input.date) ? dateStr(input.date) : Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日付が不正です: ' + str(input.date));
@@ -338,7 +338,7 @@ function recomputeResults() {
   if (cA < 0 || cB < 0 || cR < 0) throw new Error('見出しが見つかりません（setup() を実行してください）');
   const out = [];
   for (let i = 1; i < values.length; i++) {
-    out.push([resultOf(Number(values[i][cA]), Number(values[i][cB]))]);
+    out.push([resultOf(num(values[i][cA]), num(values[i][cB]))]);
   }
   sheet.getRange(2, cR + 1, out.length, 1).setValues(out);
   Logger.log('result 列を ' + out.length + ' 行更新しました');
@@ -363,7 +363,7 @@ function checkMatches() {
       else if (!members[ids[k]]) problems.push(line + c + ' が members にない: ' + ids[k]);
     });
     if (new Set(ids.filter(Boolean)).size !== ids.filter(Boolean).length) problems.push(line + '同じ人が 2 回入っている');
-    if (!isValidScore(Number(r.a_games), Number(r.b_games))) {
+    if (!isValidScore(num(r.a_games), num(r.b_games))) {
       problems.push(line + 'スコアがルール外: ' + str(r.a_games) + '-' + str(r.b_games));
     }
     if (str(r.date) && !/^\d{4}-\d{2}-\d{2}$/.test(dateStr(r.date))) problems.push(line + '日付の形が不正: ' + str(r.date));
@@ -443,18 +443,21 @@ function dateStr(v) {
   return mt[1] + '-' + ('0' + mt[2]).slice(-2) + '-' + ('0' + mt[3]).slice(-2);
 }
 
-/** 6 ゲーム先取・5-5 引き分けのルールで取りうるスコアか */
-function isValidScore(a, b) {
-  if (!Number.isInteger(a) || !Number.isInteger(b)) return false;
-  if (a === 6 && b >= 0 && b <= 4) return true;
-  if (b === 6 && a >= 0 && a <= 4) return true;
-  return a === 5 && b === 5;
+/** ゲーム数として読む。空欄は 0 ではなく NaN にする（空欄の試合を 0-0 と数えないため） */
+function num(v) {
+  return str(v) === '' ? NaN : Number(v);
 }
 
-/** A 側の勝ち = 'A'、B 側の勝ち = 'B'、引き分け = 'D' */
+/** スコアは両側とも 0〜7 の整数 */
+function isValidScore(a, b) {
+  const ok = n => Number.isInteger(n) && n >= 0 && n <= 7;
+  return ok(a) && ok(b);
+}
+
+/** ゲーム数の多い側の勝ち。A 側の勝ち = 'A'、B 側の勝ち = 'B'、同数は引き分け 'D' */
 function resultOf(a, b) {
   if (!isValidScore(a, b)) return '';
-  if (a === 6) return 'A';
-  if (b === 6) return 'B';
+  if (a > b) return 'A';
+  if (b > a) return 'B';
   return 'D';
 }

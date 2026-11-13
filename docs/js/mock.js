@@ -26,12 +26,12 @@ const Mock = (() => {
     [12, '2026-10-18', 'D', 'P08', 'P09', 'P10', 'P11', 6, 3],
     [13, '2026-11-01', 'S', 'P01', '', 'P02', '', 4, 6],
     [14, '2026-11-01', 'D', 'P12', 'P01', 'P06', 'P04', 6, 2],
-    [15, '2026-11-08', 'S', 'P09', '', 'P03', '', 6, 3],
-    [16, '2026-11-08', 'D', 'P02', 'P05', 'P07', 'P10', 1, 6],
+    [15, '2026-11-08', 'S', 'P09', '', 'P03', '', 7, 5],
+    [16, '2026-11-08', 'D', 'P02', 'P05', 'P07', 'P10', 6, 7],
   ].map(([id, date, type, a1, a2, b1, b2, ag, bg]) => ({
     match_id: id, date, type, a1, a2, b1, b2,
     a_games: ag, b_games: bg,
-    result: ag === 6 ? 'A' : bg === 6 ? 'B' : 'D',
+    result: ag > bg ? 'A' : bg > ag ? 'B' : 'D',
     entered_by: 'サンプル', note: '', event_id: '',
   }));
 
@@ -55,7 +55,16 @@ const Mock = (() => {
   }
 
   function validScore(a, b) {
-    return (a === 6 && b >= 0 && b <= 4) || (b === 6 && a >= 0 && a <= 4) || (a === 5 && b === 5);
+    const ok = n => Number.isInteger(n) && n >= 0 && n <= 7;
+    return ok(a) && ok(b);
+  }
+
+  function num(v) {
+    return v === undefined || v === null || String(v).trim() === '' ? NaN : Number(v);
+  }
+
+  function resultOf(a, b) {
+    return a > b ? 'A' : b > a ? 'B' : 'D';
   }
 
   function nameKey(s) {
@@ -97,8 +106,8 @@ const Mock = (() => {
       const m = payload.match || {};
       const type = m.type;
       if (type !== 'S' && type !== 'D') return delay({ ok: false, error: '種目が不正です' });
-      const a = Number(m.a_games);
-      const b = Number(m.b_games);
+      const a = num(m.a_games);
+      const b = num(m.b_games);
       if (!validScore(a, b)) return delay({ ok: false, error: 'スコアが不正です' });
       if (!/^\d{4}-\d{2}-\d{2}$/.test(m.date || '')) return delay({ ok: false, error: '日付が不正です' });
 
@@ -128,7 +137,7 @@ const Mock = (() => {
         match_id: id, date: m.date, type,
         a1: ids.a1, a2: ids.a2 || '', b1: ids.b1, b2: ids.b2 || '',
         a_games: a, b_games: b,
-        result: a === 6 ? 'A' : b === 6 ? 'B' : 'D',
+        result: resultOf(a, b),
         entered_by: m.entered_by || '', note: m.note || '', event_id: '',
       });
       save(STORE, matches);

@@ -60,21 +60,22 @@
         <p class="chips-hint">枠で囲まれた欄に入ります。欄を押すと入れる場所を変えられます。入っている人をもう一度押すと外れます。</p>
       </div>
 
-      <label class="field">スコア（A – B）</label>
-      <div class="score-group">
-        <div class="score-group-label">A の勝ち</div>
-        <div class="score-btns" id="sc-a"></div>
-      </div>
-      <div class="score-group">
-        <div class="score-group-label">B の勝ち</div>
-        <div class="score-btns" id="sc-b"></div>
-      </div>
-      <div class="score-group">
-        <div class="score-group-label">引き分け</div>
-        <div class="score-btns one" id="sc-d"></div>
+      <span class="field">スコア（ゲーム数を 0〜7 で入力）</span>
+      <div class="score-row">
+        <label class="score-side" for="score-a">
+          <span class="badge badge-A">A</span>
+          <input type="text" id="score-a" class="score-input" inputmode="numeric" pattern="[0-7]" maxlength="1"
+            autocomplete="off" enterkeyhint="next" placeholder="–" aria-label="A 側のゲーム数">
+        </label>
+        <span class="score-sep">–</span>
+        <label class="score-side" for="score-b">
+          <input type="text" id="score-b" class="score-input" inputmode="numeric" pattern="[0-7]" maxlength="1"
+            autocomplete="off" enterkeyhint="done" placeholder="–" aria-label="B 側のゲーム数">
+          <span class="badge badge-B">B</span>
+        </label>
       </div>
 
-      <div class="summary" id="summary">名前を入力し、スコアを選んでください</div>
+      <div class="summary" id="summary">名前とスコアを入力してください</div>
 
       <label class="field" for="entered_by">入力者（任意）</label>
       <input type="text" id="entered_by" placeholder="例：山田" maxlength="20">
@@ -109,12 +110,8 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(() => {
   const msg = $('msg');
   const summary = $('summary');
   const enteredBy = $('entered_by');
-  const SCORES = {
-    a: [[6, 0], [6, 1], [6, 2], [6, 3], [6, 4]],
-    b: [[0, 6], [1, 6], [2, 6], [3, 6], [4, 6]],
-    d: [[5, 5]],
-  };
-  let score = null;
+  const scoreA = $('score-a');
+  const scoreB = $('score-b');
   let type = 'D';
   let target = 'a1';
 
@@ -190,17 +187,28 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(() => {
     applyType();
   });
 
-  // スコアボタン（取りうる 11 通りだけ）
-  Object.keys(SCORES).forEach(kind => {
-    $('sc-' + kind).innerHTML = SCORES[kind].map(([a, b]) =>
-      '<button type="button" class="score-btn ' + kind + '" data-a="' + a + '" data-b="' + b + '">' + a + '-' + b + '</button>'
-    ).join('');
-  });
-  document.querySelectorAll('.score-btn').forEach(b => b.addEventListener('click', () => {
-    score = [Number(b.dataset.a), Number(b.dataset.b)];
-    document.querySelectorAll('.score-btn').forEach(x => x.classList.toggle('on', x === b));
+  // スコア：0〜7 の数字。全角で打っても受け付ける。空欄は null、範囲外や文字は NaN
+  function games(input) {
+    const v = input.value.normalize('NFKC').trim();
+    if (v === '') return null;
+    return /^[0-7]$/.test(v) ? Number(v) : NaN;
+  }
+  function scoreState() {
+    const a = games(scoreA);
+    const b = games(scoreB);
+    return { a, b, bad: Number.isNaN(a) || Number.isNaN(b), done: Number.isInteger(a) && Number.isInteger(b) };
+  }
+  [scoreA, scoreB].forEach(input => input.addEventListener('input', () => {
+    // 全角数字は半角に直して見せる
+    const v = input.value.normalize('NFKC');
+    if (v !== input.value) input.value = v;
+    input.classList.toggle('bad', Number.isNaN(games(input)));
+    // A を入れたら B へ進む
+    if (input === scoreA && Number.isInteger(games(scoreA)) && games(scoreB) === null) scoreB.focus();
     update();
   }));
+  // 欄を押したときは中身を選んだ状態にして、そのまま打ち直せるようにする
+  [scoreA, scoreB].forEach(input => input.addEventListener('focus', () => input.select()));
 
   function showMsg(text, isError) {
     msg.textContent = text;
@@ -238,8 +246,8 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(() => {
       date: dateIn.value,
       a1: pick('a1'), a2: type === 'D' ? pick('a2') : '',
       b1: pick('b1'), b2: type === 'D' ? pick('b2') : '',
-      a_games: score ? score[0] : null,
-      b_games: score ? score[1] : null,
+      a_games: scoreState().done ? scoreState().a : null,
+      b_games: scoreState().done ? scoreState().b : null,
       entered_by: enteredBy.value.trim(),
       note: '',
     };
@@ -251,11 +259,11 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(() => {
   }
 
   function complete(c) {
-    return !!(c.date && keys().every(k => c[k]) && !hasDuplicate(c) && score);
+    return !!(c.date && keys().every(k => c[k]) && !hasDuplicate(c) && scoreState().done);
   }
 
   function resultOf(c) {
-    return c.a_games === 6 ? 'A' : c.b_games === 6 ? 'B' : 'D';
+    return c.a_games > c.b_games ? 'A' : c.b_games > c.a_games ? 'B' : 'D';
   }
 
   function sideNames(c, side) {
@@ -292,8 +300,11 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(() => {
     } else if (hasDuplicate(c)) {
       summary.textContent = '同じ人が 2 回入っています';
       btn.disabled = true;
+    } else if (scoreState().bad) {
+      summary.textContent = 'スコアは 0〜7 の数字で入力してください';
+      btn.disabled = true;
     } else {
-      summary.textContent = '名前を入力し、スコアを選んでください';
+      summary.textContent = '名前とスコアを入力してください';
       btn.disabled = true;
     }
   }
@@ -348,8 +359,8 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(() => {
 
     // 日付・種目・入力者は残し、名前とスコアだけ消して次の試合へ
     Object.keys(inputs).forEach(k => { inputs[k].value = ''; });
-    score = null;
-    document.querySelectorAll('.score-btn').forEach(x => x.classList.remove('on'));
+    scoreA.value = '';
+    scoreB.value = '';
     setTarget('a1');
     update();
     window.scrollTo({ top: 0, behavior: 'smooth' });
