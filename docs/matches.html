@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>試合一覧 | H vs M 交流戦</title>
+<title>試合一覧 | テニス班 戦績</title>
 <link rel="icon" href="img/icon.png">
 <link rel="apple-touch-icon" href="img/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +17,7 @@
 <div id="app" hidden>
   <header class="topbar">
     <div class="container topbar-inner">
-      <h1 class="brand">H vs M<span class="brand-sub"> 交流戦</span></h1>
+      <h1 class="brand">テニス班<span class="brand-sub"> 戦績</span></h1>
       <nav id="nav" class="nav" aria-label="ページ"></nav>
     </div>
   </header>
@@ -33,8 +33,12 @@
       <h2>試合一覧</h2>
       <div class="row-2">
         <div>
-          <label class="field" for="f-event">開催回</label>
-          <select id="f-event"></select>
+          <label class="field" for="f-type">種目</label>
+          <select id="f-type">
+            <option value="">すべて</option>
+            <option value="S">シングルス</option>
+            <option value="D">ダブルス</option>
+          </select>
         </div>
         <div>
           <label class="field" for="f-player">選手</label>
@@ -57,42 +61,31 @@
 <script src="js/auth.js"></script>
 <script>
 Auth.boot({ page: 'matches.html' }).then(data => {
-  const fEvent = document.getElementById('f-event');
+  const fType = document.getElementById('f-type');
   const fPlayer = document.getElementById('f-player');
 
-  const events = data.events.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  UI.fillSelect(fEvent, events.map(e => ({ value: e.event_id, label: e.title })), 'すべての開催回');
-
-  const group = team => data.members
-    .filter(m => m.team === team)
-    .map(m => '<option value="' + UI.esc(m.member_id) + '">' + UI.esc(m.display_name) + '</option>')
-    .join('');
-  fPlayer.innerHTML =
-    '<option value="">すべての選手</option>' +
-    '<optgroup label="H">' + group('H') + '</optgroup>' +
-    '<optgroup label="M">' + group('M') + '</optgroup>';
+  UI.fillSelect(fPlayer, UI.sortedMembers().map(m => ({ value: m.member_id, label: m.display_name })), 'すべての選手');
 
   const params = new URLSearchParams(location.search);
-  if (params.get('event')) fEvent.value = params.get('event');
+  if (params.get('type')) fType.value = params.get('type');
   if (params.get('player')) fPlayer.value = params.get('player');
 
   function render() {
-    const ev = fEvent.value;
     const pl = fPlayer.value;
-    const list = UI.sortMatches(data.matches.filter(m =>
-      (!ev || m.event_id === ev) &&
-      (!pl || [m.h_p1, m.h_p2, m.m_p1, m.m_p2].indexOf(pl) >= 0)
-    ));
-    const rec = Stats.teamRecord(list);
-    document.getElementById('count').textContent = list.length
-      ? list.length + ' 試合（H ' + rec.H + ' 勝・M ' + rec.M + ' 勝・引き分け ' + rec.D + '）'
-      : '';
+    const list = UI.sortMatches(Stats.byType(data.matches, fType.value).filter(m => !pl || Stats.hasPlayer(m, pl)));
+    const sum = Stats.summary(list);
+    let text = list.length ? list.length + ' 試合（シングルス ' + sum.S + '・ダブルス ' + sum.D + '）' : '';
+    if (pl && list.length) {
+      const r = Stats.playerStats(list, data.members).get(pl);
+      if (r) text += ' ／ ' + UI.name(pl) + '：' + r.W + ' 勝 ' + r.L + ' 敗 ' + r.D + ' 分';
+    }
+    document.getElementById('count').textContent = text;
     document.getElementById('list').innerHTML = list.length
       ? list.map(m => UI.matchRowHTML(m, { highlight: pl || null })).join('')
       : '<li>' + UI.emptyHTML('該当する試合がありません') + '</li>';
   }
 
-  fEvent.addEventListener('change', render);
+  fType.addEventListener('change', render);
   fPlayer.addEventListener('change', render);
   render();
 });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>個人成績 | H vs M 交流戦</title>
+<title>個人成績 | テニス班 戦績</title>
 <link rel="icon" href="img/icon.png">
 <link rel="apple-touch-icon" href="img/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +17,7 @@
 <div id="app" hidden>
   <header class="topbar">
     <div class="container topbar-inner">
-      <h1 class="brand">H vs M<span class="brand-sub"> 交流戦</span></h1>
+      <h1 class="brand">テニス班<span class="brand-sub"> 戦績</span></h1>
       <nav id="nav" class="nav" aria-label="ページ"></nav>
     </div>
   </header>
@@ -32,10 +32,10 @@
     <section class="card">
       <div class="card-head">
         <h2>個人成績</h2>
-        <div class="seg" id="team-seg">
-          <button type="button" data-team="ALL" class="on">全員</button>
-          <button type="button" data-team="H">H</button>
-          <button type="button" data-team="M">M</button>
+        <div class="seg" id="type-seg">
+          <button type="button" data-type="ALL" class="on">全部</button>
+          <button type="button" data-type="S">シングルス</button>
+          <button type="button" data-type="D">ダブルス</button>
         </div>
       </div>
       <div class="table-wrap">
@@ -55,7 +55,7 @@
           <tbody></tbody>
         </table>
       </div>
-      <p class="muted" style="font-size:.8rem;margin:10px 0 0">名前をタップすると対戦相手別・パートナー別の成績が見られます。勝率 = 勝 ÷ 試合数。</p>
+      <p class="muted note">名前をタップすると対戦相手別・パートナー別の成績が見られます。勝率 = 勝 ÷ 試合数。</p>
     </section>
 
     <section class="card" id="detail" hidden></section>
@@ -72,40 +72,45 @@
 <script src="js/auth.js"></script>
 <script>
 Auth.boot({ page: 'players.html' }).then(data => {
-  const stats = Stats.playerStats(data.matches, data.members);
-  const rows = Array.from(stats.values());
   const tbody = document.querySelector('#players tbody');
   const detail = document.getElementById('detail');
-  let team = 'ALL';
+  let type = 'ALL';
   let sortKey = 'rate';
   let sortAsc = false;
   let selected = null;
+
+  function filtered() {
+    return Stats.byType(data.matches, type);
+  }
 
   function val(s, k) {
     return k === 'rate' ? (s.rate === null ? -1 : s.rate) : s[k];
   }
 
   function render() {
-    const list = rows
-      .filter(s => team === 'ALL' || s.member.team === team)
+    const stats = Stats.playerStats(filtered(), data.members);
+    const list = Array.from(stats.values())
+      .filter(s => s.played > 0)
       .sort((a, b) => {
         const d = val(a, sortKey) - val(b, sortKey);
         if (d !== 0) return sortAsc ? d : -d;
-        return (b.W - a.W) || (b.played - a.played) || a.member.member_id.localeCompare(b.member.member_id);
+        return Stats.compareRate(a, b);
       });
 
-    tbody.innerHTML = list.map(s =>
-      '<tr class="clickable' + (s.member.member_id === selected ? ' selected' : '') + '" data-id="' + UI.esc(s.member.member_id) + '">' +
-      '<td class="l">' + UI.teamBadge(s.member.team) + ' ' + UI.esc(s.member.display_name) + '</td>' +
-      '<td class="num">' + s.played + '</td>' +
-      '<td class="num">' + s.W + '</td>' +
-      '<td class="num">' + s.L + '</td>' +
-      '<td class="num">' + s.D + '</td>' +
-      '<td class="num col-rate">' + UI.pct(s.rate) + '</td>' +
-      '<td class="num">' + s.gf + '</td>' +
-      '<td class="num">' + s.ga + '</td>' +
-      '</tr>'
-    ).join('');
+    tbody.innerHTML = list.length
+      ? list.map(s =>
+          '<tr class="clickable' + (s.member.member_id === selected ? ' selected' : '') + '" data-id="' + UI.esc(s.member.member_id) + '">' +
+          '<td class="l">' + UI.esc(s.member.display_name) + '</td>' +
+          '<td class="num">' + s.played + '</td>' +
+          '<td class="num">' + s.W + '</td>' +
+          '<td class="num">' + s.L + '</td>' +
+          '<td class="num">' + s.D + '</td>' +
+          '<td class="num col-rate">' + UI.pct(s.rate) + '</td>' +
+          '<td class="num">' + s.gf + '</td>' +
+          '<td class="num">' + s.ga + '</td>' +
+          '</tr>'
+        ).join('')
+      : '<tr><td colspan="8" class="empty">まだ試合がありません</td></tr>';
 
     document.querySelectorAll('#players th.sortable').forEach(th => {
       const on = th.dataset.key === sortKey;
@@ -114,39 +119,37 @@ Auth.boot({ page: 'players.html' }).then(data => {
     });
   }
 
-  function recordTable(list, label) {
-    if (!list.length) return '<p class="empty">まだありません</p>';
-    return (
-      '<div class="table-wrap"><table>' +
-      '<thead><tr><th class="l">' + label + '</th><th>試合</th><th>勝</th><th>負</th><th>分</th></tr></thead><tbody>' +
-      list.map(r =>
-        '<tr><td class="l">' + UI.esc(UI.name(r.id)) + '</td>' +
-        '<td class="num">' + r.played + '</td><td class="num">' + r.W + '</td>' +
-        '<td class="num">' + r.L + '</td><td class="num">' + r.D + '</td></tr>'
-      ).join('') +
-      '</tbody></table></div>'
-    );
+  function recordLine(label, s) {
+    return '<p class="record"><span class="record-label">' + label + '</span>' +
+      (s.played
+        ? '<b>' + s.played + '</b> 試合 <b>' + s.W + '</b> 勝 <b>' + s.L + '</b> 敗 <b>' + s.D + '</b> 分' +
+          '（勝率 <b>' + UI.pct(s.rate) + '</b>）／ ゲーム <b>' + s.gf + '</b> – <b>' + s.ga + '</b>'
+        : 'まだ試合がありません') +
+      '</p>';
   }
 
-  function showDetail(id) {
-    const s = stats.get(id);
-    if (!s) return;
+  function showDetail(id, scroll) {
+    const mb = UI.member(id);
+    const all = Stats.playerStats(data.matches, data.members).get(id);
+    if (!mb && !all) return;
     selected = id;
     history.replaceState(null, '', '#' + encodeURIComponent(id));
-    const d = Stats.playerDetail(data.matches, id);
+    const statsOf = t => Stats.playerStats(Stats.byType(data.matches, t), data.members).get(id) || { played: 0 };
+    const d = Stats.playerDetail(filtered(), id);
     const played = UI.sortMatches(d.matches.map(x => x.match));
+    const scope = type === 'ALL' ? '' : '（' + UI.typeLabel(type) + '）';
 
     detail.hidden = false;
     detail.innerHTML =
       '<div class="detail-head">' +
-      '<h2><img src="' + UI.avatarSrc(id) + '" alt="" class="detail-avatar">' + UI.teamBadge(s.member.team) + ' ' + UI.esc(s.member.display_name) + '</h2>' +
+      '<h2><img src="' + UI.avatarSrc(id) + '" alt="" class="detail-avatar">' + UI.esc(UI.name(id)) + '</h2>' +
       '<button type="button" class="link" id="detail-close">閉じる</button>' +
       '</div>' +
-      '<p class="record"><b>' + s.played + '</b> 試合 <b>' + s.W + '</b> 勝 <b>' + s.L + '</b> 敗 <b>' + s.D + '</b> 分' +
-      '（勝率 <b>' + UI.pct(s.rate) + '</b>）／ ゲーム <b>' + s.gf + '</b> – <b>' + s.ga + '</b></p>' +
-      '<h3>対戦相手別</h3>' + recordTable(d.opponents, '相手') +
-      '<h3>パートナー別</h3>' + recordTable(d.partners, '相方') +
-      '<h3>出場試合</h3>' +
+      recordLine('シングルス', statsOf('S')) +
+      recordLine('ダブルス', statsOf('D')) +
+      '<h3>対戦相手別' + scope + '</h3>' + UI.recordTable(d.opponents, '相手') +
+      (type === 'S' ? '' : '<h3>パートナー別' + scope + '</h3>' + UI.recordTable(d.partners, '相方')) +
+      '<h3>出場試合' + scope + '</h3>' +
       (played.length
         ? '<ul class="match-list">' + played.map(m => UI.matchRowHTML(m, { highlight: id })).join('') + '</ul>'
         : '<p class="empty">まだありません</p>');
@@ -158,7 +161,7 @@ Auth.boot({ page: 'players.html' }).then(data => {
       render();
     });
     render();
-    detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (scroll) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   document.querySelectorAll('#players th.sortable').forEach(th => th.addEventListener('click', () => {
@@ -168,19 +171,25 @@ Auth.boot({ page: 'players.html' }).then(data => {
     render();
   }));
 
-  document.querySelectorAll('#team-seg button').forEach(b => b.addEventListener('click', () => {
-    team = b.dataset.team;
-    document.querySelectorAll('#team-seg button').forEach(x => x.classList.toggle('on', x === b));
+  UI.bindSeg('type-seg', t => {
+    type = t;
     render();
-  }));
+    if (selected) showDetail(selected, false);
+  });
 
   tbody.addEventListener('click', ev => {
     const tr = ev.target.closest('tr[data-id]');
-    if (tr) showDetail(tr.dataset.id);
+    if (tr) showDetail(tr.dataset.id, true);
+  });
+
+  // 対戦相手のリンクなどで同じページ内のハッシュが変わったとき
+  window.addEventListener('hashchange', () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (id && id !== selected) showDetail(id, true);
   });
 
   render();
-  if (location.hash.length > 1) showDetail(decodeURIComponent(location.hash.slice(1)));
+  if (location.hash.length > 1) showDetail(decodeURIComponent(location.hash.slice(1)), true);
 });
 </script>
 </body>

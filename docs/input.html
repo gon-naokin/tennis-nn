@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>結果入力 | H vs M 交流戦</title>
+<title>結果入力 | テニス班 戦績</title>
 <link rel="icon" href="img/icon.png">
 <link rel="apple-touch-icon" href="img/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +17,7 @@
 <div id="app" hidden>
   <header class="topbar">
     <div class="container topbar-inner">
-      <h1 class="brand">H vs M<span class="brand-sub"> 交流戦</span></h1>
+      <h1 class="brand">テニス班<span class="brand-sub"> 戦績</span></h1>
       <nav id="nav" class="nav" aria-label="ページ"></nav>
     </div>
   </header>
@@ -32,31 +32,41 @@
     <section class="card">
       <h2>試合結果の入力</h2>
 
-      <label class="field" for="event">開催回</label>
-      <select id="event"></select>
-
-      <div class="pair-head"><span class="badge badge-H">H</span> ペア</div>
       <div class="row-2">
-        <input type="text" id="h1" list="names-H" maxlength="20" autocomplete="off" placeholder="名前を入力" aria-label="H ペア 1 人目">
-        <input type="text" id="h2" list="names-H" maxlength="20" autocomplete="off" placeholder="名前を入力" aria-label="H ペア 2 人目">
+        <div>
+          <label class="field" for="date">日付</label>
+          <input type="date" id="date">
+        </div>
+        <div>
+          <span class="field">種目</span>
+          <div class="seg seg-wide" id="type-seg">
+            <button type="button" data-type="S">シングルス</button>
+            <button type="button" data-type="D" class="on">ダブルス</button>
+          </div>
+        </div>
       </div>
 
-      <div class="pair-head"><span class="badge badge-M">M</span> ペア</div>
-      <div class="row-2">
-        <input type="text" id="m1" list="names-M" maxlength="20" autocomplete="off" placeholder="名前を入力" aria-label="M ペア 1 人目">
-        <input type="text" id="m2" list="names-M" maxlength="20" autocomplete="off" placeholder="名前を入力" aria-label="M ペア 2 人目">
+      <div class="pair-head"><span class="badge badge-A">A</span> <span id="label-a">ペア</span></div>
+      <div class="row-2" id="row-a">
+        <input type="text" id="a1" list="names" maxlength="20" autocomplete="off" placeholder="名前を入力" aria-label="A 側 1 人目">
+        <input type="text" id="a2" list="names" maxlength="20" autocomplete="off" placeholder="名前を入力" aria-label="A 側 2 人目">
       </div>
-      <datalist id="names-H"></datalist>
-      <datalist id="names-M"></datalist>
 
-      <label class="field">スコア（H – M）</label>
+      <div class="pair-head"><span class="badge badge-B">B</span> <span id="label-b">ペア</span></div>
+      <div class="row-2" id="row-b">
+        <input type="text" id="b1" list="names" maxlength="20" autocomplete="off" placeholder="名前を入力" aria-label="B 側 1 人目">
+        <input type="text" id="b2" list="names" maxlength="20" autocomplete="off" placeholder="名前を入力" aria-label="B 側 2 人目">
+      </div>
+      <datalist id="names"></datalist>
+
+      <label class="field">スコア（A – B）</label>
       <div class="score-group">
-        <div class="score-group-label">H の勝ち</div>
-        <div class="score-btns" id="sc-h"></div>
+        <div class="score-group-label">A の勝ち</div>
+        <div class="score-btns" id="sc-a"></div>
       </div>
       <div class="score-group">
-        <div class="score-group-label">M の勝ち</div>
-        <div class="score-btns" id="sc-m"></div>
+        <div class="score-group-label">B の勝ち</div>
+        <div class="score-btns" id="sc-b"></div>
       </div>
       <div class="score-group">
         <div class="score-group-label">引き分け</div>
@@ -90,46 +100,62 @@
 <script src="js/ui.js"></script>
 <script src="js/auth.js"></script>
 <script>
-Auth.boot({ page: 'input.html', requireAdmin: true }).then(data => {
+Auth.boot({ page: 'input.html', requireAdmin: true }).then(() => {
   const $ = id => document.getElementById(id);
-  const selEvent = $('event');
-  const inH1 = $('h1'), inH2 = $('h2'), inM1 = $('m1'), inM2 = $('m2');
-  const nameInputs = [[inH1, 'H'], [inH2, 'H'], [inM1, 'M'], [inM2, 'M']];
+  const dateIn = $('date');
+  const inputs = { a1: $('a1'), a2: $('a2'), b1: $('b1'), b2: $('b2') };
   const btn = $('submit');
   const msg = $('msg');
   const summary = $('summary');
   const enteredBy = $('entered_by');
   const SCORES = {
-    h: [[6, 0], [6, 1], [6, 2], [6, 3], [6, 4]],
-    m: [[0, 6], [1, 6], [2, 6], [3, 6], [4, 6]],
+    a: [[6, 0], [6, 1], [6, 2], [6, 3], [6, 4]],
+    b: [[0, 6], [1, 6], [2, 6], [3, 6], [4, 6]],
     d: [[5, 5]],
   };
   let score = null;
+  let type = 'D';
   const sent = [];
 
-  // 開催回（新しい順、先頭を初期選択）
-  const events = data.events.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  UI.fillSelect(selEvent, events.map(e => ({ value: e.event_id, label: e.title + '（' + UI.fmtDate(e.date) + '）' })));
+  dateIn.value = UI.today();
+  dateIn.max = UI.today();
 
   // 入力候補（active のみ）。一覧にない名前もそのまま入力でき、送信時に members へ登録される
   function fillNames() {
-    ['H', 'M'].forEach(team => {
-      $('names-' + team).innerHTML = UI.getData().members
-        .filter(m => m.active && m.team === team)
-        .map(m => '<option value="' + UI.esc(m.display_name) + '"></option>')
-        .join('');
-    });
+    $('names').innerHTML = UI.sortedMembers()
+      .filter(m => m.active)
+      .map(m => '<option value="' + UI.esc(m.display_name) + '"></option>')
+      .join('');
   }
   fillNames();
 
+  // 種目：前回の選択を覚えておく
+  try { type = localStorage.getItem('th_input_type') === 'S' ? 'S' : 'D'; } catch (e) { /* ignore */ }
+  function applyType() {
+    const single = type === 'S';
+    UI.setSeg('type-seg', type);
+    inputs.a2.hidden = single;
+    inputs.b2.hidden = single;
+    $('row-a').classList.toggle('one', single);
+    $('row-b').classList.toggle('one', single);
+    $('label-a').textContent = single ? '選手' : 'ペア';
+    $('label-b').textContent = single ? '選手' : 'ペア';
+    update();
+  }
+  UI.bindSeg('type-seg', t => {
+    type = t;
+    try { localStorage.setItem('th_input_type', t); } catch (e) { /* ignore */ }
+    applyType();
+  });
+
   // スコアボタン（取りうる 11 通りだけ）
   Object.keys(SCORES).forEach(kind => {
-    $('sc-' + kind).innerHTML = SCORES[kind].map(([h, m]) =>
-      '<button type="button" class="score-btn ' + kind + '" data-h="' + h + '" data-m="' + m + '">' + h + '-' + m + '</button>'
+    $('sc-' + kind).innerHTML = SCORES[kind].map(([a, b]) =>
+      '<button type="button" class="score-btn ' + kind + '" data-a="' + a + '" data-b="' + b + '">' + a + '-' + b + '</button>'
     ).join('');
   });
   document.querySelectorAll('.score-btn').forEach(b => b.addEventListener('click', () => {
-    score = [Number(b.dataset.h), Number(b.dataset.m)];
+    score = [Number(b.dataset.a), Number(b.dataset.b)];
     document.querySelectorAll('.score-btn').forEach(x => x.classList.toggle('on', x === b));
     update();
   }));
@@ -139,21 +165,25 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(data => {
     msg.className = 'form-msg' + (isError ? ' error' : '');
   }
 
+  function keys() {
+    return type === 'S' ? ['a1', 'b1'] : ['a1', 'a2', 'b1', 'b2'];
+  }
+
   // 登録済みの名前は member_id に置き換える。新しい名前は文字のまま送る
-  function pick(input, team) {
-    const text = input.value.trim();
+  function pick(k) {
+    const text = inputs[k].value.trim();
     if (!text) return '';
-    const mb = UI.findMember(team, text);
+    const mb = UI.findMember(text);
     return mb ? mb.member_id : text;
   }
 
   function newNames() {
     const seen = {};
-    return nameInputs
-      .map(([input, team]) => ({ text: input.value.trim(), team }))
-      .filter(n => n.text && !UI.findMember(n.team, n.text))
-      .filter(n => {
-        const k = n.team + UI.nameKey(n.text);
+    return keys()
+      .map(k => inputs[k].value.trim())
+      .filter(text => text && !UI.findMember(text))
+      .filter(text => {
+        const k = UI.nameKey(text);
         if (seen[k]) return false;
         seen[k] = true;
         return true;
@@ -162,46 +192,52 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(data => {
 
   function current() {
     return {
-      event_id: selEvent.value,
-      h_p1: pick(inH1, 'H'), h_p2: pick(inH2, 'H'),
-      m_p1: pick(inM1, 'M'), m_p2: pick(inM2, 'M'),
-      h_games: score ? score[0] : null,
-      m_games: score ? score[1] : null,
+      type: type,
+      date: dateIn.value,
+      a1: pick('a1'), a2: type === 'D' ? pick('a2') : '',
+      b1: pick('b1'), b2: type === 'D' ? pick('b2') : '',
+      a_games: score ? score[0] : null,
+      b_games: score ? score[1] : null,
       entered_by: enteredBy.value.trim(),
       note: '',
     };
   }
 
-  function samePerson(a, b) {
-    return !!a && UI.nameKey(a) === UI.nameKey(b);
+  function hasDuplicate(c) {
+    const ks = keys().map(k => c[k]).filter(Boolean).map(UI.nameKey);
+    return new Set(ks).size !== ks.length;
   }
 
   function complete(c) {
-    return !!(c.event_id && c.h_p1 && c.h_p2 && c.m_p1 && c.m_p2 &&
-      !samePerson(c.h_p1, c.h_p2) && !samePerson(c.m_p1, c.m_p2) && score);
+    return !!(c.date && keys().every(k => c[k]) && !hasDuplicate(c) && score);
   }
 
   function resultOf(c) {
-    return c.h_games === 6 ? 'H' : c.m_games === 6 ? 'M' : 'D';
+    return c.a_games === 6 ? 'A' : c.b_games === 6 ? 'B' : 'D';
+  }
+
+  function sideNames(c, side) {
+    const ids = type === 'S' ? [c[side + '1']] : [c[side + '1'], c[side + '2']];
+    return ids.map(UI.name).join('・');
   }
 
   function update() {
     const c = current();
     const added = newNames();
     if (complete(c)) {
+      const r = resultOf(c);
       summary.innerHTML =
-        '<img src="' + UI.resultImg(resultOf(c)) + '" alt="" class="summary-img">' +
-        '<span class="side-h">' + UI.esc(UI.pair(c.h_p1, c.h_p2)) + '</span>' +
-        '<span class="score">' + c.h_games + '-' + c.m_games + '</span>' +
-        '<span class="side-m">' + UI.esc(UI.pair(c.m_p1, c.m_p2)) + '</span>' +
-        '<span class="summary-result">' + UI.resultText(resultOf(c)) + '</span>' +
-        (added.length
-          ? '<span class="summary-new">はじめての名前：' +
-            added.map(n => UI.esc(n.team + ' ' + n.text)).join('、') + '</span>'
-          : '');
+        '<img src="' + UI.resultImg(r) + '" alt="" class="summary-img">' +
+        '<span class="summary-meta">' + UI.esc(UI.fmtDate(c.date)) + ' ' + UI.typeBadge(type) + '</span>' +
+        '<span class="side-a">' + UI.esc(sideNames(c, 'a')) + '</span>' +
+        '<span class="score">' + c.a_games + '-' + c.b_games + '</span>' +
+        '<span class="side-b">' + UI.esc(sideNames(c, 'b')) + '</span>' +
+        '<span class="summary-result">' +
+        (r === 'D' ? '引き分け' : UI.esc(sideNames(c, r === 'A' ? 'a' : 'b')) + ' の勝ち') + '</span>' +
+        (added.length ? '<span class="summary-new">はじめての名前：' + added.map(UI.esc).join('、') + '</span>' : '');
       btn.disabled = false;
-    } else if (samePerson(c.h_p1, c.h_p2) || samePerson(c.m_p1, c.m_p2)) {
-      summary.textContent = '同じ人がペアになっています';
+    } else if (hasDuplicate(c)) {
+      summary.textContent = '同じ人が 2 回入っています';
       btn.disabled = true;
     } else {
       summary.textContent = '名前を入力し、スコアを選んでください';
@@ -209,8 +245,8 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(data => {
     }
   }
 
-  selEvent.addEventListener('change', update);
-  nameInputs.forEach(([input]) => input.addEventListener('input', update));
+  dateIn.addEventListener('change', update);
+  Object.keys(inputs).forEach(k => inputs[k].addEventListener('input', update));
 
   // 入力者名はこの端末に覚えておく
   try { enteredBy.value = localStorage.getItem('th_entered_by') || ''; } catch (e) { /* ignore */ }
@@ -248,27 +284,25 @@ Auth.boot({ page: 'input.html', requireAdmin: true }).then(data => {
     Auth.invalidate();
     UI.addMembers(res.created || []);
     fillNames();
-    const ev = UI.event(c.event_id);
-    const ids = res.ids || [c.h_p1, c.h_p2, c.m_p1, c.m_p2];
-    sent.unshift(Object.assign({ match_id: res.match_id, date: ev ? ev.date : '', result: resultOf(c) }, c,
-      { h_p1: ids[0], h_p2: ids[1], m_p1: ids[2], m_p2: ids[3] }));
+    const ids = res.ids || [c.a1, c.a2, c.b1, c.b2];
+    sent.unshift(Object.assign({}, c, {
+      match_id: res.match_id, result: resultOf(c),
+      a1: ids[0], a2: ids[1], b1: ids[2], b2: ids[3],
+    }));
     $('sent-card').hidden = false;
     $('sent').innerHTML = sent.map(m => UI.matchRowHTML(m)).join('');
     UI.toast('登録しました（No.' + res.match_id + '）');
     UI.celebrate();
 
-    // 開催回と入力者は残し、ペアとスコアだけ消して次の試合へ
-    nameInputs.forEach(([input]) => { input.value = ''; });
+    // 日付・種目・入力者は残し、名前とスコアだけ消して次の試合へ
+    Object.keys(inputs).forEach(k => { inputs[k].value = ''; });
     score = null;
     document.querySelectorAll('.score-btn').forEach(x => x.classList.remove('on'));
     update();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
-  if (!events.length) {
-    showMsg('開催回がありません。スプレッドシートの events シートに行を追加してください。', true);
-  }
-  update();
+  applyType();
 });
 </script>
 </body>

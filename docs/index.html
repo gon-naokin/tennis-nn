@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>戦績 | H vs M 交流戦</title>
+<title>ホーム | テニス班 戦績</title>
 <link rel="icon" href="img/icon.png">
 <link rel="apple-touch-icon" href="img/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +17,7 @@
 <div id="app" hidden>
   <header class="topbar">
     <div class="container topbar-inner">
-      <h1 class="brand">H vs M<span class="brand-sub"> 交流戦</span></h1>
+      <h1 class="brand">テニス班<span class="brand-sub"> 戦績</span></h1>
       <nav id="nav" class="nav" aria-label="ページ"></nav>
     </div>
   </header>
@@ -26,42 +26,46 @@
   <main class="container">
     <section class="card hero">
       <div class="hero-board">
-        <figure class="hero-team" id="team-h">
-          <img src="img/bear.png" alt="">
-          <figcaption class="team-h">H チーム</figcaption>
+        <figure class="hero-team">
+          <img src="img/cat.png" alt="">
+          <figcaption>シングルス<b id="hero-s" class="hero-num">0</b></figcaption>
         </figure>
         <div class="hero-score">
-          <span id="hero-h" class="team-h">0</span>
-          <span class="vs">–</span>
-          <span id="hero-m" class="team-m">0</span>
+          <span id="hero-total">0</span><span class="hero-unit">試合</span>
         </div>
-        <figure class="hero-team" id="team-m">
-          <img src="img/frog.png" alt="">
-          <figcaption class="team-m">M チーム</figcaption>
+        <figure class="hero-team">
+          <img src="img/girl.png" alt="">
+          <figcaption>ダブルス<b id="hero-d" class="hero-num">0</b></figcaption>
         </figure>
       </div>
       <p class="hero-msg" id="hero-msg"></p>
       <div class="hero-sub">
-        引き分け <b id="hero-d">0</b> ／ 全 <b id="hero-total">0</b> 試合<br>
-        取得ゲーム H <b id="hero-hg">0</b> – <b id="hero-mg">0</b> M
-      </div>
-    </section>
-
-    <section class="card">
-      <img src="img/balloon.png" alt="" class="card-mascot">
-      <h2>開催回ごと</h2>
-      <div class="table-wrap">
-        <table id="by-event">
-          <thead>
-            <tr><th class="l">開催回</th><th>H 勝</th><th>M 勝</th><th>分</th><th>ゲーム</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        最新の試合 <b id="hero-last">–</b> ／ 出場 <b id="hero-people">0</b> 人
       </div>
     </section>
 
     <section class="card">
       <img src="img/star.png" alt="" class="card-mascot">
+      <div class="card-head">
+        <h2>勝率ランキング</h2>
+        <div class="seg" id="rank-seg">
+          <button type="button" data-type="S" class="on">シングルス</button>
+          <button type="button" data-type="D">ダブルス</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="ranking">
+          <thead>
+            <tr><th>順位</th><th class="l">名前</th><th>試合</th><th>勝</th><th>負</th><th>分</th><th>勝率</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted note">勝率 = 勝 ÷ 試合数。同じ勝率なら勝ち数の多い順。</p>
+    </section>
+
+    <section class="card">
+      <img src="img/balloon.png" alt="" class="card-mascot">
       <h2>最近の試合</h2>
       <ul id="recent" class="match-list"></ul>
       <a class="more" href="matches.html">すべての試合を見る</a>
@@ -80,38 +84,52 @@
 <script>
 Auth.boot({ page: 'index.html' }).then(data => {
   const matches = data.matches;
-  const rec = Stats.teamRecord(matches);
-  document.getElementById('hero-h').textContent = rec.H;
-  document.getElementById('hero-m').textContent = rec.M;
-  document.getElementById('hero-d').textContent = rec.D;
-  document.getElementById('hero-total').textContent = rec.total;
-  document.getElementById('hero-hg').textContent = rec.hGames;
-  document.getElementById('hero-mg').textContent = rec.mGames;
+  const sum = Stats.summary(matches);
+  const $ = id => document.getElementById(id);
+  $('hero-total').textContent = sum.total;
+  $('hero-s').textContent = sum.S;
+  $('hero-d').textContent = sum.D;
+  $('hero-last').textContent = sum.last ? UI.fmtDate(sum.last) : '–';
+  $('hero-people').textContent = sum.people;
 
-  // リードしているチームのキャラが跳ねる
-  document.getElementById('team-h').classList.toggle('leading', rec.H > rec.M);
-  document.getElementById('team-m').classList.toggle('leading', rec.M > rec.H);
-  document.getElementById('hero-msg').textContent =
-    rec.total === 0 ? '第1試合を待ってます！' :
-    rec.H > rec.M ? 'H チームがリード中！' :
-    rec.M > rec.H ? 'M チームがリード中！' : '五分五分の大接戦！';
+  const month = UI.today().slice(0, 7);
+  const thisMonth = matches.filter(m => (m.date || '').slice(0, 7) === month).length;
+  $('hero-msg').textContent =
+    sum.total === 0 ? '第1試合を待ってます！' :
+    thisMonth ? '今月は ' + thisMonth + ' 試合！' : '今月の第1試合を待ってます！';
 
-  const rows = Stats.byEvent(matches, data.events);
-  const tbody = document.querySelector('#by-event tbody');
-  tbody.innerHTML = rows.length
-    ? rows.map(r =>
-        '<tr>' +
-        '<td class="l">' + UI.esc(r.event.title) + '<br><span class="muted">' + UI.esc(UI.fmtDate(r.event.date)) + '</span></td>' +
-        '<td class="num">' + r.H + '</td>' +
-        '<td class="num">' + r.M + '</td>' +
-        '<td class="num">' + r.D + '</td>' +
-        '<td class="num">' + r.hGames + '-' + r.mGames + '</td>' +
-        '</tr>'
-      ).join('')
-    : '<tr><td colspan="5" class="empty">まだ開催回がありません</td></tr>';
+  // ランキング。前回見ていた種目を覚えておく
+  let type = 'S';
+  try { type = localStorage.getItem('th_rank_type') === 'D' ? 'D' : 'S'; } catch (e) { /* ignore */ }
+
+  function renderRanking() {
+    const list = Stats.ranking(Stats.byType(matches, type), data.members, 1);
+    const tbody = document.querySelector('#ranking tbody');
+    tbody.innerHTML = list.length
+      ? list.map((r, i) =>
+          '<tr>' +
+          '<td class="num rank">' + (i + 1) + '</td>' +
+          '<td class="l"><a href="players.html#' + encodeURIComponent(r.member.member_id) + '">' + UI.esc(r.member.display_name) + '</a></td>' +
+          '<td class="num">' + r.played + '</td>' +
+          '<td class="num">' + r.W + '</td>' +
+          '<td class="num">' + r.L + '</td>' +
+          '<td class="num">' + r.D + '</td>' +
+          '<td class="num col-rate">' + UI.pct(r.rate) + '</td>' +
+          '</tr>'
+        ).join('')
+      : '<tr><td colspan="7" class="empty">まだ' + UI.typeLabel(type) + 'の試合がありません</td></tr>';
+  }
+
+  UI.setSeg('rank-seg', type);
+  UI.bindSeg('rank-seg', t => {
+    type = t;
+    try { localStorage.setItem('th_rank_type', t); } catch (e) { /* ignore */ }
+    renderRanking();
+  });
+  renderRanking();
 
   const recent = UI.sortMatches(matches).slice(0, 5);
-  document.getElementById('recent').innerHTML = recent.length
+  $('recent').innerHTML = recent.length
     ? recent.map(m => UI.matchRowHTML(m)).join('')
     : '<li>' + UI.emptyHTML('まだ試合がありません。すやすや…') + '</li>';
 });

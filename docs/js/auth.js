@@ -3,7 +3,7 @@
 const Auth = (() => {
   const K_KEY = 'th_key';
   const K_ROLE = 'th_role';
-  const K_CACHE = 'th_cache';
+  const K_CACHE = 'th_cache2'; // 旧版（H vs M）の形のキャッシュを読まないよう名前を変えた
   const CACHE_MS = 60 * 1000; // 画面間の移動で毎回 GAS を呼ばないための短いキャッシュ
 
   const ls = {

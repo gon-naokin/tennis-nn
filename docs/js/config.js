@@ -5,5 +5,5 @@ const CONFIG = {
   // 例: 'https://script.google.com/macros/s/AKfycb.../exec'
   GAS_URL: 'https://script.google.com/macros/s/AKfycbyEN3WzlmGVHX6xjS-wInELsRgDKuiDRlSeHjL1IJdt9clr_dgFbwUBbbJRsHLStg75/exec',
 
-  APP_TITLE: 'H vs M 交流戦',
+  APP_TITLE: 'テニス班 戦績',
 };

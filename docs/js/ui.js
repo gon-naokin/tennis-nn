@@ -2,14 +2,11 @@
 const UI = (() => {
   let data = { members: [], events: [], matches: [], role: '' };
   const memberById = new Map();
-  const eventById = new Map();
 
   function setData(d) {
     data = d;
     memberById.clear();
-    eventById.clear();
     d.members.forEach(m => memberById.set(m.member_id, m));
-    d.events.forEach(e => eventById.set(e.event_id, e));
   }
   function getData() { return data; }
 
@@ -27,13 +24,12 @@ const UI = (() => {
     return String(s === undefined || s === null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toLowerCase();
   }
 
-  /** 入力された名前からメンバーを探す。チーム内で表示名、次に名前の順に見る */
-  function findMember(team, text) {
+  /** 入力された名前からメンバーを探す。表示名、次に名前の順に見る。同名が複数なら null */
+  function findMember(text) {
     const key = nameKey(text);
-    const inTeam = data.members.filter(m => m.team === team);
     const hit = list => (list.length === 1 ? list[0] : null);
-    return hit(inTeam.filter(m => nameKey(m.display_name) === key)) ||
-      hit(inTeam.filter(m => nameKey(m.name) === key));
+    return hit(data.members.filter(m => nameKey(m.display_name) === key)) ||
+      hit(data.members.filter(m => nameKey(m.name) === key));
   }
 
   function member(id) { return memberById.get(id); }
@@ -41,11 +37,15 @@ const UI = (() => {
     const m = memberById.get(id);
     return m ? m.display_name : id;
   }
-  function pair(a, b) { return name(a) + '・' + name(b); }
-  function event(id) { return eventById.get(id); }
-  function eventTitle(id) {
-    const e = eventById.get(id);
-    return e ? e.title : id;
+
+  /** 名前順に並べたメンバー（試合に出た人と active の人） */
+  function sortedMembers() {
+    const played = new Set();
+    data.matches.forEach(m => Stats.sides(m).A.concat(Stats.sides(m).B).forEach(id => played.add(id)));
+    return data.members
+      .filter(m => m.active || played.has(m.member_id))
+      .slice()
+      .sort((a, b) => String(a.display_name).localeCompare(String(b.display_name), 'ja'));
   }
 
   function esc(s) {
@@ -61,28 +61,29 @@ const UI = (() => {
     return s ? String(s).replace(/-/g, '/') : '';
   }
 
-  function resultText(r) {
-    return r === 'H' ? 'H の勝ち' : r === 'M' ? 'M の勝ち' : '引き分け';
+  /** 今日の日付（端末の時刻で YYYY-MM-DD） */
+  function today() {
+    const d = new Date();
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
   }
 
-  function badge(r) {
-    const label = r === 'D' ? '分' : r;
-    return '<span class="badge badge-' + esc(r) + '">' + esc(label) + '</span>';
+  function typeLabel(t) {
+    return t === 'S' ? 'シングルス' : 'ダブルス';
   }
 
-  function teamBadge(team) {
-    return '<span class="badge badge-' + esc(team) + '">' + esc(team) + '</span>';
+  function typeBadge(t) {
+    return '<span class="badge type-' + (t === 'S' ? 'S' : 'D') + '">' + typeLabel(t) + '</span>';
   }
 
-  /** 試合の結果に対応するキャラ（H=クマ、M=カエル、引き分け=風船） */
+  /** 試合の結果に対応するキャラ（A 側の勝ち=クマ、B 側の勝ち=カエル、引き分け=風船） */
   function resultImg(r) {
-    return 'img/' + (r === 'H' ? 'bear' : r === 'M' ? 'frog' : 'balloon') + '.png';
+    return 'img/' + (r === 'A' ? 'bear' : r === 'B' ? 'frog' : 'balloon') + '.png';
   }
 
   /** 選手ごとの相棒キャラ。member_id の番号で決まるので毎回同じ */
   function avatarSrc(id) {
     const pool = ['cat', 'dog', 'balloon', 'girl', 'star'];
-    const n = parseInt(String(id).slice(1), 10) || 0;
+    const n = parseInt(String(id).replace(/^\D+/, ''), 10) || 0;
     return 'img/' + pool[n % pool.length] + '.png';
   }
 
@@ -106,21 +107,41 @@ const UI = (() => {
     return list.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.match_id - a.match_id);
   }
 
+  /** 片側の名前（ダブルスは「・」でつなぐ）。hl に member_id を渡すとその人を太字にする */
+  function sideHTML(ids, hl) {
+    return ids.map(id => (id === hl ? '<b>' + esc(name(id)) + '</b>' : esc(name(id)))).join('・');
+  }
+
   /** 試合 1 件の行。opts.highlight に member_id を渡すとその人を太字にする */
   function matchRowHTML(m, opts) {
     const hl = (opts && opts.highlight) || null;
-    const nm = id => (id === hl ? '<b>' + esc(name(id)) + '</b>' : esc(name(id)));
-    const cls = m.result === 'H' ? 'win-h' : m.result === 'M' ? 'win-m' : 'draw';
+    const s = Stats.sides(m);
+    const cls = m.result === 'A' ? 'win-a' : m.result === 'B' ? 'win-b' : 'draw';
     return (
       '<li class="match ' + cls + '">' +
-      '<div class="match-meta">' + esc(fmtDate(m.date)) + ' <span class="muted">' + esc(eventTitle(m.event_id)) + '</span></div>' +
+      '<div class="match-meta">' + esc(fmtDate(m.date)) + ' ' + typeBadge(m.type) + '</div>' +
       '<div class="match-line">' +
-      '<span class="side side-h">' + nm(m.h_p1) + '・' + nm(m.h_p2) + '</span>' +
-      '<span class="score">' + esc(m.h_games) + '-' + esc(m.m_games) + '</span>' +
-      '<span class="side side-m">' + nm(m.m_p1) + '・' + nm(m.m_p2) + '</span>' +
+      '<span class="side side-a">' + sideHTML(s.A, hl) + '</span>' +
+      '<span class="score">' + esc(m.a_games) + '-' + esc(m.b_games) + '</span>' +
+      '<span class="side side-b">' + sideHTML(s.B, hl) + '</span>' +
       '</div>' +
       (m.note ? '<div class="match-note">' + esc(m.note) + '</div>' : '') +
       '</li>'
+    );
+  }
+
+  /** 対戦成績の表（相手別・パートナー別） */
+  function recordTable(list, label) {
+    if (!list.length) return '<p class="empty">まだありません</p>';
+    return (
+      '<div class="table-wrap"><table>' +
+      '<thead><tr><th class="l">' + esc(label) + '</th><th>試合</th><th>勝</th><th>負</th><th>分</th></tr></thead><tbody>' +
+      list.map(r =>
+        '<tr><td class="l"><a href="players.html#' + encodeURIComponent(r.id) + '">' + esc(name(r.id)) + '</a></td>' +
+        '<td class="num">' + r.played + '</td><td class="num">' + r.W + '</td>' +
+        '<td class="num">' + r.L + '</td><td class="num">' + r.D + '</td></tr>'
+      ).join('') +
+      '</tbody></table></div>'
     );
   }
 
@@ -162,9 +183,22 @@ const UI = (() => {
       items.map(it => '<option value="' + esc(it.value) + '">' + esc(it.label) + '</option>').join('');
   }
 
+  /** シングルス／ダブルスの切り替えボタン。onChange(type) を呼ぶ */
+  function bindSeg(id, onChange) {
+    const btns = document.querySelectorAll('#' + id + ' button');
+    btns.forEach(b => b.addEventListener('click', () => {
+      btns.forEach(x => x.classList.toggle('on', x === b));
+      onChange(b.dataset.type);
+    }));
+  }
+
+  function setSeg(id, type) {
+    document.querySelectorAll('#' + id + ' button').forEach(x => x.classList.toggle('on', x.dataset.type === type));
+  }
+
   return {
-    setData, getData, addMembers, nameKey, findMember, member, name, pair, event, eventTitle,
-    esc, pct, fmtDate, resultText, badge, teamBadge, sortMatches, matchRowHTML,
-    renderNav, toast, fillSelect, resultImg, avatarSrc, emptyHTML, celebrate,
+    setData, getData, addMembers, nameKey, findMember, member, name, sortedMembers,
+    esc, pct, fmtDate, today, typeLabel, typeBadge, sortMatches, sideHTML, matchRowHTML, recordTable,
+    renderNav, toast, fillSelect, bindSeg, setSeg, resultImg, avatarSrc, emptyHTML, celebrate,
   };
 })();

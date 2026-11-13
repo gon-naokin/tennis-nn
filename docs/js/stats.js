@@ -1,49 +1,49 @@
 // 集計ロジック（DESIGN.md §6）。入力は getAll の matches（deleted 除外済み）。
+// 試合は A 側と B 側の対戦。シングルスは a1 対 b1、ダブルスは a1・a2 対 b1・b2。
 const Stats = (() => {
   function blank() {
     return { played: 0, W: 0, L: 0, D: 0, gf: 0, ga: 0 };
   }
 
-  /** そのチームから見た 1 試合の結果 */
-  function outcomeFor(team, m) {
+  /** 試合の両側の member_id */
+  function sides(m) {
+    const A = m.type === 'D' ? [m.a1, m.a2] : [m.a1];
+    const B = m.type === 'D' ? [m.b1, m.b2] : [m.b1];
+    return { A: A.filter(Boolean), B: B.filter(Boolean) };
+  }
+
+  /** その人がどちら側か（出ていなければ null） */
+  function sideOf(m, id) {
+    const s = sides(m);
+    return s.A.indexOf(id) >= 0 ? 'A' : s.B.indexOf(id) >= 0 ? 'B' : null;
+  }
+
+  function hasPlayer(m, id) {
+    return sideOf(m, id) !== null;
+  }
+
+  /** その側から見た 1 試合の結果 */
+  function outcomeFor(side, m) {
     if (m.result === 'D') return 'D';
-    return m.result === team ? 'W' : 'L';
+    return m.result === side ? 'W' : 'L';
   }
 
-  function playersOf(m) {
-    return [
-      { id: m.h_p1, team: 'H' }, { id: m.h_p2, team: 'H' },
-      { id: m.m_p1, team: 'M' }, { id: m.m_p2, team: 'M' },
-    ];
+  /** 種目で絞る。type が 'S' か 'D' 以外なら全部 */
+  function byType(matches, type) {
+    return type === 'S' || type === 'D' ? matches.filter(m => m.type === type) : matches;
   }
 
-  /** チーム戦績 */
-  function teamRecord(matches) {
-    const r = { H: 0, M: 0, D: 0, hGames: 0, mGames: 0, total: matches.length };
+  /** 全体の数字 */
+  function summary(matches) {
+    const people = new Set();
+    let S = 0, D = 0, last = '';
     matches.forEach(m => {
-      r[m.result] += 1;
-      r.hGames += m.h_games;
-      r.mGames += m.m_games;
+      if (m.type === 'S') S += 1; else D += 1;
+      if ((m.date || '') > last) last = m.date;
+      const s = sides(m);
+      s.A.concat(s.B).forEach(id => people.add(id));
     });
-    return r;
-  }
-
-  /** 開催回ごとの内訳（新しい順） */
-  function byEvent(matches, events) {
-    const map = new Map();
-    events.forEach(e => map.set(e.event_id, { event: e, H: 0, M: 0, D: 0, hGames: 0, mGames: 0, total: 0 }));
-    matches.forEach(m => {
-      let row = map.get(m.event_id);
-      if (!row) {
-        row = { event: { event_id: m.event_id, title: m.event_id, date: m.date }, H: 0, M: 0, D: 0, hGames: 0, mGames: 0, total: 0 };
-        map.set(m.event_id, row);
-      }
-      row[m.result] += 1;
-      row.hGames += m.h_games;
-      row.mGames += m.m_games;
-      row.total += 1;
-    });
-    return Array.from(map.values()).sort((a, b) => (b.event.date || '').localeCompare(a.event.date || ''));
+    return { total: matches.length, S, D, last, people: people.size };
   }
 
   /** 個人成績。member_id → { member, played, W, L, D, gf, ga, rate } */
@@ -52,23 +52,41 @@ const Stats = (() => {
     members.forEach(mb => stats.set(mb.member_id, Object.assign({ member: mb }, blank())));
 
     matches.forEach(m => {
-      playersOf(m).forEach(p => {
-        let s = stats.get(p.id);
-        if (!s) {
-          // members に無い ID が試合に出てきても落ちないようにする
-          s = Object.assign({ member: { member_id: p.id, team: p.team, name: p.id, display_name: p.id, active: true } }, blank());
-          stats.set(p.id, s);
-        }
-        s.played += 1;
-        s[outcomeFor(p.team, m)] += 1;
-        s.gf += p.team === 'H' ? m.h_games : m.m_games;
-        s.ga += p.team === 'H' ? m.m_games : m.h_games;
+      const s = sides(m);
+      ['A', 'B'].forEach(side => {
+        s[side].forEach(id => {
+          let r = stats.get(id);
+          if (!r) {
+            // members に無い ID が試合に出てきても落ちないようにする
+            r = Object.assign({ member: { member_id: id, name: id, display_name: id, active: true } }, blank());
+            stats.set(id, r);
+          }
+          r.played += 1;
+          r[outcomeFor(side, m)] += 1;
+          r.gf += side === 'A' ? m.a_games : m.b_games;
+          r.ga += side === 'A' ? m.b_games : m.a_games;
+        });
       });
     });
 
     // 勝率 = 勝 ÷ 試合数（引き分けも分母に含める）
-    stats.forEach(s => { s.rate = s.played ? s.W / s.played : null; });
+    stats.forEach(r => { r.rate = r.played ? r.W / r.played : null; });
     return stats;
+  }
+
+  /** 並べ方：勝率 → 勝ち数 → 試合数 */
+  function compareRate(a, b) {
+    const ra = a.rate === null ? -1 : a.rate;
+    const rb = b.rate === null ? -1 : b.rate;
+    return (rb - ra) || (b.W - a.W) || (b.played - a.played) ||
+      String(a.member.display_name).localeCompare(String(b.member.display_name), 'ja');
+  }
+
+  /** 勝率ランキング。試合数が min 未満の人は外す */
+  function ranking(matches, members, min) {
+    return Array.from(playerStats(matches, members).values())
+      .filter(r => r.played >= (min || 1))
+      .sort(compareRate);
   }
 
   /** 個人の詳細：対戦相手別・パートナー別・出場試合 */
@@ -78,19 +96,19 @@ const Stats = (() => {
     const list = [];
 
     matches.forEach(m => {
-      const ps = playersOf(m);
-      const me = ps.filter(p => p.id === memberId)[0];
-      if (!me) return;
-      const o = outcomeFor(me.team, m);
+      const side = sideOf(m, memberId);
+      if (!side) return;
+      const o = outcomeFor(side, m);
       list.push({ match: m, outcome: o });
-      ps.forEach(p => {
-        if (p.id === memberId) return;
-        const target = p.team === me.team ? partners : opponents;
-        let r = target.get(p.id);
-        if (!r) { r = { id: p.id, played: 0, W: 0, L: 0, D: 0 }; target.set(p.id, r); }
+      const s = sides(m);
+      const tally = (target, id) => {
+        let r = target.get(id);
+        if (!r) { r = { id: id, played: 0, W: 0, L: 0, D: 0 }; target.set(id, r); }
         r.played += 1;
         r[o] += 1;
-      });
+      };
+      s[side].forEach(id => { if (id !== memberId) tally(partners, id); });
+      s[side === 'A' ? 'B' : 'A'].forEach(id => tally(opponents, id));
     });
 
     const order = (a, b) => b.played - a.played || b.W - a.W || a.id.localeCompare(b.id);
@@ -101,5 +119,5 @@ const Stats = (() => {
     };
   }
 
-  return { teamRecord, byEvent, playerStats, playerDetail, outcomeFor };
+  return { sides, sideOf, hasPlayer, outcomeFor, byType, summary, playerStats, compareRate, ranking, playerDetail };
 })();
